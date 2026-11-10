@@ -1,18 +1,22 @@
-// The game: the one-shot's script, carried over as it was. The grow step splits it
-// by what the code does and moves it to TypeScript.
-import './config.js';
-
-'use strict';
 // Canto Salvaje: a small dungeon, a team of up to four pets, turn-based battles with timed hits
 // and timed blocks, and a healing song that convinces a defeated creature to join you.
+// The scenes, the run's state and the loop; the rules, tables, drawing kit, sound and input
+// are modules beside it.
+import { CONFIG, tune } from './config';
+import { params, manual, clock, seedFrom, install } from './hook';
+import { rng, setSeed } from './game/rng';
+import { clamp, lerp, ease, TAU, hash, bz, typeMult, parryChance, xpNeed, calcStats, calcDmg } from './game/rules';
+import { TYPES, MOVES, KEYCAPS, SPECIES, STARTERS, ROOMS, THEMES } from './game/data';
+import type { Action, Battle, Loose, Move, Pet, PostStep, QueueEntry, RunState, Song, Tally, TallyRow, Theme } from './game/types';
+import {
+  W, H, FONT, mainCtx, ctx, setCtx, clear, text, txt, INK, GOLD, CRIM, CYAN, B, fs, el, lg, rg, tube, flame,
+  pill, panel, typePill, arrowShape, heart, diamond, keycap, chevron,
+} from './screen';
+import { FIG_W, FIG_H, silhouette, drawFigure } from './creatures';
+import { setMuted, muted, tone, seq, sfx } from './audio';
+import { down, hit, pressed, tap, held, digit } from './input';
 
-// ---- Built to be checked ----------------------------------------------------------------
-const params = new URLSearchParams(location.search);
-const tune = new Proxy({}, { get: (_, k) => CONFIG[k].value }); // live: tune.speed is CONFIG.speed.value
 const STEP = 1 / 60;            // simulation step in seconds; motion is per second, never per frame
-const W = 1280, H = 720;        // logical size
-const PIXEL = false;
-const FONT = '"Trebuchet MS", "Segoe UI", Verdana, sans-serif';
 const TITLE = 'Canto Salvaje';
 const CONTROLS = [
   'Flechas o WASD: moverte por la mazmorra',
@@ -21,573 +25,13 @@ const CONTROLS = [
   'Flechas: las notas de la canción sanadora',
   'P: pausa  ·  M: silencio',
 ];
-const clock = window.GAME_CLOCK || { now: () => performance.now() / 1000 }; // a check may inject one
-const CHEAP = params.get('render') === 'cheap';
-let seed;
-function rng() { // mulberry32; every gameplay random call reads this, never Math.random
-  seed = (seed + 0x6D2B79F5) | 0;
-  let t = Math.imul(seed ^ (seed >>> 15), seed | 1);
-  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-}
-const events = []; // window.game.events: anything the game wants a run to see
-
-// ---- Screen ---------------------------------------------------------------------------
-const canvas = document.getElementById('game');
-const mainCtx = canvas.getContext('2d');
-let ctx = mainCtx; // swapped to an offscreen context to draw silhouettes
-function fit() { // fills the window at any size and pixel ratio
-  const k = Math.min(innerWidth / W, innerHeight / H);
-  const s = PIXEL ? Math.max(1, Math.floor(k)) : k;
-  const r = PIXEL ? 1 : s * (devicePixelRatio || 1);
-  canvas.width = Math.round(W * r); canvas.height = Math.round(H * r);
-  canvas.style.width = Math.round(W * s) + 'px'; canvas.style.height = Math.round(H * s) + 'px';
-  canvas.style.marginTop = Math.max(0, Math.floor((innerHeight - H * s) / 2)) + 'px';
-  canvas.style.imageRendering = PIXEL ? 'pixelated' : 'auto';
-  mainCtx.setTransform(r, 0, 0, r, 0, 0); mainCtx.imageSmoothingEnabled = !PIXEL;
-}
-addEventListener('resize', fit); fit();
-function clear(c) { ctx.fillStyle = c; ctx.fillRect(0, 0, W, H); }
-function text(s, x, y, size, c, align = 'center') { txt(s, x, y, size, c, align); }
-function txt(s, x, y, size, c, align = 'center', bold = false, stroke = true) {
-  ctx.font = `${bold ? '700 ' : ''}${size}px ${FONT}`; ctx.textAlign = align; ctx.textBaseline = 'middle';
-  if (stroke) { ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(3, size / 5); ctx.strokeStyle = 'rgba(10,8,22,0.9)'; ctx.strokeText(s, x, y); }
-  ctx.fillStyle = c; ctx.fillText(s, x, y);
-}
-
-// ---- Input: keys by position (event.code), OS key repeat ignored ------------------------
-const down = new Set(), hit = new Set();
-const pressed = code => hit.has(code); // true for one step after the key goes down
-addEventListener('keydown', e => {
-  startAudio();
-  if (!e.repeat) { down.add(e.code); hit.add(e.code); }
-  if (e.code === 'Space' || e.code.startsWith('Arrow') || e.code === 'Backspace') e.preventDefault();
-});
-addEventListener('keyup', e => down.delete(e.code));
-addEventListener('pointerdown', () => startAudio());
-addEventListener('blur', () => down.clear());
-const KEYS = {
-  up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'],
-  ok: ['Enter', 'NumpadEnter', 'Space'], enter: ['Enter', 'NumpadEnter'], back: ['Backspace', 'Escape'],
-};
-const tap = name => KEYS[name].some(pressed);
-const held = name => KEYS[name].some(c => down.has(c));
-function digit() { for (let i = 1; i <= 4; i++) if (pressed('Digit' + i) || pressed('Numpad' + i)) return i - 1; return -1; }
-
-// ---- Audio: started on first input, mute on M --------------------------------------------
-let audio = null, muted = false;
-function startAudio() {
-  if (!audio) {
-    const ac = window.GAME_AUDIO || new (window.AudioContext || window.webkitAudioContext)(); // a check may inject one
-    const out = ac.createGain(); out.gain.value = muted ? 0 : tune.volume;
-    out.connect(ac.destination); audio = { ac, out };
-  }
-  if (audio.ac.state === 'suspended') audio.ac.resume();
-}
-function setMuted(m) { muted = m; if (audio) audio.out.gain.value = m ? 0 : tune.volume; }
-addEventListener('tune', () => setMuted(muted));
-function tone(freq, dur, type = 'square', vol = 0.3, delay = 0, slide = 0) {
-  if (!audio || muted) return;
-  const t = audio.ac.currentTime + delay, o = audio.ac.createOscillator(), g = audio.ac.createGain();
-  o.type = type; o.frequency.setValueAtTime(freq, t);
-  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq * slide), t + dur);
-  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(audio.out); o.start(t); o.stop(t + dur + 0.02);
-}
-function seq(notes, type = 'triangle', vol = 0.22, gap = 0.1, dur = 0.16) {
-  notes.forEach((f, i) => tone(f, dur, type, vol, i * gap));
-}
-function sfx(n) {
-  switch (n) {
-    case 'select': tone(660, 0.05, 'triangle', 0.15); break;
-    case 'deny': tone(150, 0.14, 'square', 0.15); break;
-    case 'confirm': tone(880, 0.07, 'triangle', 0.18); tone(1320, 0.08, 'triangle', 0.12, 0.05); break;
-    case 'encounter': seq([392, 523, 392, 659], 'square', 0.12, 0.07, 0.09); break;
-    case 'perfect': tone(988, 0.1, 'square', 0.18); tone(1480, 0.18, 'triangle', 0.2, 0.03); break;
-    case 'good': tone(587, 0.1, 'square', 0.16); break;
-    case 'weak': tone(220, 0.12, 'sawtooth', 0.12, 0, 0.7); break;
-    case 'parry': tone(1568, 0.2, 'triangle', 0.25); tone(2349, 0.14, 'sine', 0.18, 0.02); tone(784, 0.1, 'square', 0.1); break;
-    case 'block': tone(330, 0.12, 'square', 0.18); tone(165, 0.1, 'triangle', 0.15); break;
-    case 'hurt': tone(160, 0.22, 'sawtooth', 0.22, 0, 0.5); break;
-    case 'faint': seq([440, 349, 262, 196], 'triangle', 0.2, 0.09, 0.14); break;
-    case 'fanfare': seq([523, 659, 784, 1047, 784, 1047], 'square', 0.12, 0.11, 0.18); break;
-    case 'level': seq([523, 659, 784, 1047, 1319], 'triangle', 0.18, 0.06, 0.12); break;
-    case 'join': seq([659, 784, 988, 1319, 988, 1319, 1568], 'triangle', 0.2, 0.09, 0.2); break;
-    case 'heal': seq([523, 659, 880, 1047], 'sine', 0.2, 0.07, 0.2); break;
-    case 'guard': tone(392, 0.3, 'sine', 0.2, 0, 1.5); break;
-    case 'door': seq([196, 262, 330], 'triangle', 0.18, 0.08, 0.2); break;
-    case 'warn': tone(110, 0.3, 'sawtooth', 0.2); tone(110, 0.3, 'sawtooth', 0.2, 0.35); break;
-    case 'evolve': for (let i = 0; i < 12; i++) tone(330 + i * 60, 0.12, 'triangle', 0.12, i * 0.2); break;
-    case 'flee': seq([392, 330, 262], 'sine', 0.15, 0.12, 0.2); break;
-    case 'lose': seq([392, 370, 349, 262], 'triangle', 0.2, 0.25, 0.4); break;
-  }
-}
-
-// ---- Data: types, moves, creatures, rooms --------------------------------------------------
-const INK = '#1b1426', GOLD = '#f2c14e', CRIM = '#e0315b', CYAN = '#5ff2ff';
-const TYPES = {
-  brasa: { name: 'Brasa', col: '#ff7a3a', beats: 'brote' },
-  brote: { name: 'Brote', col: '#7ccf4f', beats: 'marea' },
-  marea: { name: 'Marea', col: '#46a8ff', beats: 'brasa' },
-  neutro: { name: 'Neutro', col: '#c9c2b0', beats: null },
-};
-function typeMult(mt, dt) {
-  if (mt === 'neutro' || !TYPES[dt] || dt === 'neutro') return 1;
-  if (TYPES[mt].beats === dt) return tune.type_strong;
-  if (TYPES[dt].beats === mt) return tune.type_weak;
-  return 1;
-}
-// pow: power per hit · hits: timed rings · ring: ring-time factor · feint: the ring stops, then snaps
-const MOVES = {
-  embestida: { name: 'Embestida', type: 'neutro', en: 0, pow: 8, hits: 1, target: 'one', kind: 'hit' },
-  chispazo: { name: 'Chispazo', type: 'brasa', en: 1, pow: 6, hits: 2, target: 'one', kind: 'hit' },
-  cola_ignea: { name: 'Cola Ígnea', type: 'brasa', en: 2, pow: 9, hits: 2, target: 'one', kind: 'hit' },
-  llamarada: { name: 'Llamarada', type: 'brasa', en: 3, pow: 10, hits: 1, target: 'all', kind: 'hit' },
-  latigo_hoja: { name: 'Látigo Hoja', type: 'brote', en: 1, pow: 6, hits: 2, target: 'one', kind: 'hit' },
-  brote_curativo: { name: 'Brote Curativo', type: 'brote', en: 2, pow: 0, hits: 1, target: 'ally', kind: 'heal' },
-  esporas: { name: 'Tormenta de Esporas', type: 'brote', en: 3, pow: 9, hits: 1, target: 'all', kind: 'hit' },
-  burbuja: { name: 'Burbujas', type: 'marea', en: 1, pow: 6, hits: 2, target: 'one', kind: 'hit' },
-  escudo_agua: { name: 'Escudo de Agua', type: 'marea', en: 2, pow: 0, hits: 0, target: 'team', kind: 'guard' },
-  maremoto: { name: 'Maremoto', type: 'marea', en: 3, pow: 10, hits: 1, target: 'all', kind: 'hit' },
-  rodada: { name: 'Rodada Musgosa', type: 'brote', en: 1, pow: 11, hits: 1, target: 'one', kind: 'hit', ring: 1.3 },
-  endurecer: { name: 'Endurecer', type: 'neutro', en: 1, pow: 0, hits: 0, target: 'self', kind: 'guard' },
-  chorro_doble: { name: 'Chorro Doble', type: 'marea', en: 1, pow: 6, hits: 2, target: 'one', kind: 'hit', ring: 0.8 },
-  lengua: { name: 'Lengua Látigo', type: 'neutro', en: 0, pow: 4, hits: 3, target: 'one', kind: 'hit', ring: 0.7 },
-  picotazo: { name: 'Picoteo', type: 'neutro', en: 0, pow: 4, hits: 3, target: 'one', kind: 'hit', ring: 0.6 },
-  pluma_ardiente: { name: 'Pluma Ardiente', type: 'brasa', en: 2, pow: 8, hits: 2, target: 'one', kind: 'hit', ring: 0.75 },
-  latigazo: { name: 'Latigazo Espino', type: 'brote', en: 1, pow: 12, hits: 1, target: 'one', kind: 'hit', feint: true },
-  abrazo_zarza: { name: 'Abrazo de Zarza', type: 'brote', en: 2, pow: 7, hits: 2, target: 'one', kind: 'hit', drain: 0.5, feint: true },
-  puno_raiz: { name: 'Puño Raíz', type: 'brote', en: 0, pow: 12, hits: 2, target: 'one', kind: 'hit', ring: 1.1 },
-  terremoto: { name: 'TERREMOTO', type: 'neutro', en: 0, pow: 7, hits: 4, target: 'all', kind: 'hit', ring: 0.8 },
-  marejada: { name: 'Marejada', type: 'marea', en: 0, pow: 9, hits: 3, target: 'one', kind: 'hit', ring: 0.75 },
-  descanso: { name: 'Descansar', type: 'neutro', en: 0, pow: 0, hits: 0, target: 'self', kind: 'guard' },
-};
-// The keys a timed press can use. Each hit wants one of them (MOVE_KEYS), never shown to the player.
-const KEYCAPS = [
-  { id: 'W', label: 'W', codes: ['KeyW', 'ArrowUp'] }, { id: 'A', label: 'A', codes: ['KeyA', 'ArrowLeft'] },
-  { id: 'S', label: 'S', codes: ['KeyS', 'ArrowDown'] }, { id: 'D', label: 'D', codes: ['KeyD', 'ArrowRight'] },
-  { id: 'SPC', label: 'ESPACIO', codes: ['Space'] },
-];
-// Hidden from the player: the key for each hit, in order (it cycles when a move has more hits than keys).
-const MOVE_KEYS = {
-  embestida: ['SPC'], chispazo: ['D', 'A'], cola_ignea: ['W', 'W'], llamarada: ['S'], latigo_hoja: ['A', 'D'],
-  brote_curativo: ['W'], esporas: ['S'], burbuja: ['A', 'A'], maremoto: ['S'], rodada: ['S'], chorro_doble: ['D', 'D'],
-  lengua: ['A', 'W', 'D'], picotazo: ['W', 'W', 'W'], pluma_ardiente: ['D', 'SPC'], latigazo: ['A'], abrazo_zarza: ['W', 'S'],
-  puno_raiz: ['D', 'A'], terremoto: ['SPC', 'S', 'SPC', 'S'], marejada: ['A', 'D', 'A'],
-};
-for (const [id, k] of Object.entries(MOVE_KEYS)) MOVES[id].keys = k;
-// Free moves give shared energy back when they act.
-const MOVE_GAIN = { embestida: 1, picotazo: 1, lengua: 1, descanso: 2 };
-for (const [id, g] of Object.entries(MOVE_GAIN)) MOVES[id].gain = g;
-// parry_config: how much energy a move's perfect parries are worth, spread over its hits.
-// Each perfect parry gives en_parry with chance parry_config / hits (at most 1). Moves not listed use
-// tune.parry_config (1). The boss's moves are worth more, since it fights alone.
-const MOVE_PARRY = { puno_raiz: 2, marejada: 2.5, terremoto: 3 };
-for (const [id, p] of Object.entries(MOVE_PARRY)) MOVES[id].parry = p;
-const parryChance = m => Math.min(1, (m.parry != null ? m.parry : tune.parry_config) / Math.max(1, m.hits));
-// base and grow: [hp, atk, def, spd] at level 1, and per level after it
-const SPECIES = {
-  chispin: { name: 'Chispín', type: 'brasa', rarity: 'inicial', base: [34, 11, 8, 12], grow: [6, 2.2, 1.4, 1.2], learn: { 1: ['embestida', 'chispazo'], 3: ['cola_ignea'], 5: ['llamarada'] }, evo: 'fogaral', h: 92, w: 96, desc: 'Rápido y fogoso: golpes dobles de Brasa.' },
-  retoni: { name: 'Retoñí', type: 'brote', rarity: 'inicial', base: [40, 9, 10, 8], grow: [7, 1.8, 1.8, 0.8], learn: { 1: ['embestida', 'latigo_hoja'], 3: ['brote_curativo'], 5: ['esporas'] }, evo: 'frondalce', h: 84, w: 84, desc: 'Resistente: aprende a curar a su equipo.' },
-  gotin: { name: 'Gotín', type: 'marea', rarity: 'inicial', base: [37, 10, 9, 10], grow: [6.5, 2, 1.6, 1], learn: { 1: ['embestida', 'burbuja'], 3: ['escudo_agua'], 5: ['maremoto'] }, evo: 'mareon', h: 64, w: 112, desc: 'Equilibrado: aprende a proteger a su equipo.' },
-  musgorro: { name: 'Musgorro', type: 'brote', rarity: 'común', base: [26, 8, 10, 5], grow: [6, 1.8, 2, 0.6], learn: { 1: ['embestida', 'rodada'], 4: ['endurecer'], 6: ['esporas'] }, h: 62, w: 104 },
-  charquillo: { name: 'Charquillo', type: 'marea', rarity: 'común', base: [22, 9, 7, 11], grow: [5, 2, 1.4, 1.2], learn: { 1: ['embestida', 'chorro_doble'], 4: ['lengua'], 6: ['escudo_agua'] }, h: 58, w: 92 },
-  ascuervo: { name: 'Ascuervo', type: 'brasa', rarity: 'rara', base: [20, 11, 6, 15], grow: [4.5, 2.4, 1.2, 1.6], learn: { 1: ['picotazo'], 3: ['pluma_ardiente'], 6: ['llamarada'] }, h: 132, w: 100 },
-  zarzalma: { name: 'Zarzalma', type: 'brote', rarity: 'rara', base: [28, 12, 8, 9], grow: [6, 2.5, 1.6, 1], learn: { 1: ['embestida', 'latigazo'], 4: ['abrazo_zarza'], 6: ['brote_curativo'] }, h: 132, w: 92 },
-  golem: { name: 'Gólem Raíz', type: 'brote', rarity: 'jefe', base: [110, 13, 12, 7], grow: [13, 2.6, 2.2, 0.6], learn: { 1: ['puno_raiz', 'terremoto', 'marejada'] }, h: 258, w: 270 },
-};
-// Evolved forms: stronger base, the same moves to learn.
-const EVOS = { fogaral: ['chispin', 'Fogaral', 132, 136], frondalce: ['retoni', 'Frondalce', 168, 124], mareon: ['gotin', 'Mareón', 138, 120] };
-for (const [id, [from, name, h, w]] of Object.entries(EVOS)) {
-  const f = SPECIES[from];
-  SPECIES[id] = { name, type: f.type, rarity: 'inicial', base: f.base.map((b, i) => b + [12, 4, 3, 2][i]), grow: f.grow.map(g => g * 1.1), learn: f.learn, h, w, evolved: true };
-}
-const STARTERS = ['chispin', 'retoni', 'gotin'];
-
-// Rooms: 20 x 10 tiles. # wall · P pillar · ~ water · f fountain · D door on (locked until the room is clear)
-// L door back · , moss · g tall grass · . floor
-const ROOMS = [
-  { name: 'Vestíbulo de la fuente', torches: [7, 12], theme: 0, spawn: [3.5, 4.6], map: [
-    '####################',
-    '#,,......##.......,#',
-    '#.f......##........#',
-    '#..................#',
-    '#.....,............D',
-    '#..................D',
-    '#......,...........#',
-    '#,.......##.......,#',
-    '#,,......##......,,#',
-    '####################'],
-    wilds: [{ x: 10.5, y: 4.9, group: [['musgorro', 1]] }] },
-  { name: 'Galería de los charcos', torches: [7, 14], theme: 1, map: [
-    '####################',
-    '#.......~~~~.......#',
-    '#..,....~~~~...,...#',
-    '#...........P......#',
-    'L..................D',
-    'L.......P..........D',
-    '#......,...........#',
-    '#...~~~.......g....#',
-    '#...~~~.....ggg....#',
-    '####################'],
-    wilds: [{ x: 5.5, y: 3, group: [['charquillo', 2]] }, { x: 14.5, y: 6.6, group: [['musgorro', 2], ['charquillo', 1]] }] },
-  { name: 'Cámara de las raíces', torches: [6, 13], theme: 2, map: [
-    '####################',
-    '#,,,...........,,,,#',
-    '#,..P.......P.....,#',
-    '#..................#',
-    'L..................D',
-    'L..................D',
-    '#..................#',
-    '#,..P.......P.....,#',
-    '#,,,.............,,#',
-    '####################'],
-    wilds: [{ x: 10, y: 4.9, group: [['charquillo', 3], ['ascuervo', 3], ['musgorro', 3]] }] },
-  { name: 'Pasaje de las zarzas', torches: [7, 13], theme: 3, map: [
-    '####################',
-    '#gg.......#......gg#',
-    '#g........#.......g#',
-    '#.....P...#...P....#',
-    'L..................D',
-    'L..................D',
-    '#.....P...#...P....#',
-    '#g........#.......g#',
-    '#gg.......#......gg#',
-    '####################'],
-    wilds: [{ x: 5, y: 2, group: [['zarzalma', 4]] }, { x: 15, y: 6.8, group: [['ascuervo', 4], ['musgorro', 4]] }] },
-  { name: 'Antesala inundada', torches: [5, 14], theme: 4, map: [
-    '####################',
-    '#,.......~~.......,#',
-    '#........~~........#',
-    '#...P....~~....P...#',
-    'L..................D',
-    'L..................D',
-    '#...P....~~....P...#',
-    '#........~~........#',
-    '#,.......~~.......,#',
-    '####################'],
-    wilds: [{ x: 13.5, y: 4.9, group: [['zarzalma', 5], ['charquillo', 5], ['ascuervo', 4]] }] },
-  { name: 'Sala del Guardián', torches: [7, 10, 13], theme: 5, map: [
-    '####################',
-    '#,,,,..........,,,,#',
-    '#,P.....P..P.....P,#',
-    '#..................#',
-    'L..................#',
-    'L..................#',
-    '#..................#',
-    '#,P.....P..P.....P,#',
-    '#,,,,..........,,,,#',
-    '####################'],
-    wilds: [{ x: 14.5, y: 5.1, group: [['golem', 0]], boss: true }] },
-];
-const THEMES = [
-  { wallTop: '#3c5560', wallBot: '#1f2d38', floorFar: '#3c4f4e', floorNear: '#5d6f62', glow: '#ffb060', accent: '#5ff2ff' },
-  { wallTop: '#2f5266', wallBot: '#162836', floorFar: '#355057', floorNear: '#4f6a6c', glow: '#ffb060', accent: '#46a8ff' },
-  { wallTop: '#46503a', wallBot: '#222a1e', floorFar: '#454d3b', floorNear: '#66704f', glow: '#ffbe6a', accent: '#9cff7a' },
-  { wallTop: '#4a3f4c', wallBot: '#241c28', floorFar: '#4a4448', floorNear: '#6a5e5c', glow: '#ff9f5a', accent: '#ff6fa8' },
-  { wallTop: '#27495a', wallBot: '#10222e', floorFar: '#2e4a52', floorNear: '#466568', glow: '#ffb060', accent: '#5ff2ff' },
-  { wallTop: '#4a2a3e', wallBot: '#1c0e1a', floorFar: '#3d2a33', floorNear: '#5d3f40', glow: '#ff7a4a', accent: '#e0315b' },
-];
-
-// ---- Helpers ---------------------------------------------------------------------------
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const lerp = (a, b, u) => a + (b - a) * u;
-const ease = u => 1 - Math.pow(1 - clamp(u, 0, 1), 3);
-const TAU = Math.PI * 2;
-function hash(a, b) { let h = (a * 374761393 + b * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
-function bz(p0, p1, p2, p3, t) { const u = 1 - t; return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3; }
-
-// ---- Drawing: shared pieces -------------------------------------------------------------
-function B() { ctx.beginPath(); }
-function fs(fill, lw = 3, stroke = INK) {
-  ctx.fillStyle = fill; ctx.fill();
-  if (lw) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.lineJoin = 'round'; ctx.stroke(); }
-}
-function el(x, y, rx, ry, rot = 0) { ctx.ellipse(x, y, Math.max(0.1, rx), Math.max(0.1, ry), rot, 0, TAU); }
-function lg(x0, y0, x1, y1, stops) { const g = ctx.createLinearGradient(x0, y0, x1, y1); stops.forEach((c, i) => g.addColorStop(i / (stops.length - 1), c)); return g; }
-function rg(x, y, r, c0, c1) { const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.45, r * 0.08, x, y, r); g.addColorStop(0, c0); g.addColorStop(1, c1); return g; }
-function eye(x, y, r) { B(); el(x, y, r, r * 1.2); fs('#17121f', 0); B(); el(x + r * 0.35, y - r * 0.45, r * 0.38, r * 0.38); fs('#fff', 0); }
-function tube(path, w, col) {
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  B(); path(); ctx.lineWidth = w + 6; ctx.strokeStyle = INK; ctx.stroke();
-  B(); path(); ctx.lineWidth = w; ctx.strokeStyle = col; ctx.stroke();
-}
-function leg(x, y, w, h, col) { B(); ctx.roundRect(x - w / 2, y, w, h, w / 2); fs(col, 2.5); }
-function flame(x0, y0, x1, y1, wid, cols, wob) {
-  B(); ctx.moveTo(x0 - wid, y0);
-  ctx.bezierCurveTo(x0 - wid * 1.6, y0 - (y0 - y1) * 0.5, x1 + wob - wid * 0.4, y1 + 12, x1 + wob, y1);
-  ctx.bezierCurveTo(x1 + wob + wid * 0.6, y1 + 16, x0 + wid * 1.4, y0 - (y0 - y1) * 0.4, x0 + wid, y0);
-  ctx.closePath(); fs(lg(0, y1, 0, y0, cols));
-}
-function pill(x, y, w, h, fill, stroke) { B(); ctx.roundRect(x, y, w, h, h / 2); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.lineWidth = 2; ctx.strokeStyle = stroke; ctx.stroke(); } }
-function panel(x, y, w, h, border = GOLD, a = 0.86) {
-  B(); ctx.roundRect(x, y, w, h, 12); ctx.fillStyle = `rgba(14,12,28,${a})`; ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = border; ctx.stroke();
-  B(); ctx.roundRect(x + 4, y + 4, w - 8, h - 8, 9); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.stroke();
-}
-function typePill(type, x, y, size = 13) {
-  const T_ = TYPES[type]; ctx.font = `700 ${size}px ${FONT}`; const w = ctx.measureText(T_.name).width + 16;
-  pill(x, y - size * 0.75, w, size * 1.5, T_.col, INK); txt(T_.name, x + w / 2, y, size, '#160f1c', 'center', true, false); return w;
-}
-function arrowShape(dir, x, y, s, fill, stroke = INK, lw = 3) { // a drawn arrow, never a font glyph
-  ctx.save(); ctx.translate(x, y); ctx.rotate([Math.PI, Math.PI / 2, -Math.PI / 2, 0][dir]);
-  B(); ctx.moveTo(s, 0); ctx.lineTo(0, -s); ctx.lineTo(0, -s * 0.42); ctx.lineTo(-s, -s * 0.42);
-  ctx.lineTo(-s, s * 0.42); ctx.lineTo(0, s * 0.42); ctx.lineTo(0, s); ctx.closePath();
-  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-  if (stroke) { ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.lineJoin = 'round'; ctx.stroke(); }
-  ctx.restore();
-}
-function heart(x, y, s, col) {
-  B(); ctx.moveTo(x, y + s * 0.9);
-  ctx.bezierCurveTo(x - s * 1.4, y - s * 0.2, x - s * 0.6, y - s * 1.2, x, y - s * 0.4);
-  ctx.bezierCurveTo(x + s * 0.6, y - s * 1.2, x + s * 1.4, y - s * 0.2, x, y + s * 0.9); fs(col, 2);
-}
-function diamond(x, y, s, fill) { B(); ctx.moveTo(x, y - s); ctx.lineTo(x + s * 0.75, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s * 0.75, y); ctx.closePath(); fs(fill, 1.5); }
-const keyLabel = id => (KEYCAPS.find(k => k.id === id) || { label: '' }).label;
-function keycap(id, x, y, s = 1) { // a drawn key with its letter, shown only inside a ring
-  const wide = id === 'SPC', w = (wide ? 92 : 38) * s, h = 36 * s;
-  B(); ctx.roundRect(x - w / 2, y - h / 2 + 3 * s, w, h, 7 * s); ctx.fillStyle = '#0d0a18'; ctx.fill();
-  B(); ctx.roundRect(x - w / 2, y - h / 2, w, h, 7 * s); ctx.fillStyle = '#f4ead0'; ctx.fill(); ctx.lineWidth = Math.max(1.5, 2.5 * s); ctx.strokeStyle = INK; ctx.stroke();
-  txt(keyLabel(id), x, y + s, Math.max(11, (wide ? 15 : 22) * s), '#1b1426', 'center', true, false);
-}
-function chevron(x, y, s, col) { B(); ctx.moveTo(x - s, y - s * 0.7); ctx.lineTo(x, y + s * 0.5); ctx.lineTo(x + s, y - s * 0.7); ctx.lineTo(x, y - s * 0.1); ctx.closePath(); fs(col, 2); }
-
-// ---- Drawing: the creatures (feet at 0,0, facing +x, ink outline, warm light top-left) ------
-const DRAW = {
-  chispin(t) {
-    const w = Math.sin(t * 11) * 4;
-    flame(-22, -30, -52, -96, 9, ['#fff3a0', '#ffb030', '#e2452a'], w);
-    flame(-24, -34, -44, -78, 4, ['#fffbe0', '#ffd860', '#ff9a3a'], w * 0.6);
-    leg(-17, -14, 9, 15, '#b8401c'); leg(-5, -14, 9, 15, '#b8401c');
-    B(); el(0, -27, 29, 17); fs(rg(0, -27, 32, '#ffa060', '#cf4720'));
-    B(); el(17, -24, 10, 11); fs('#ffe8c8', 0);
-    leg(11, -14, 9, 15, '#e0592a'); leg(23, -14, 9, 15, '#e0592a');
-    B(); ctx.moveTo(14, -60); ctx.lineTo(7, -90); ctx.lineTo(28, -66); ctx.closePath(); fs('#e8642c');
-    B(); ctx.moveTo(14, -64); ctx.lineTo(11, -80); ctx.lineTo(22, -66); ctx.closePath(); fs('#6a221a', 0);
-    B(); ctx.moveTo(31, -66); ctx.lineTo(42, -94); ctx.lineTo(46, -61); ctx.closePath(); fs('#e8642c');
-    B(); el(29, -50, 20, 16); fs(rg(29, -50, 22, '#ffb070', '#d4501f'));
-    B(); el(46, -45, 10, 6.5); fs('#ffe8c8');
-    B(); el(54, -47, 3.2, 2.6); fs(INK, 0);
-    eye(34, -55, 4.2);
-    B(); ctx.moveTo(22, -46); ctx.lineTo(16, -42); ctx.lineTo(23, -41); fs('#ffd860', 1.5);
-  },
-  fogaral(t) {
-    const w = Math.sin(t * 10) * 5;
-    flame(-36, -58, -96, -138, 13, ['#fff3a0', '#ffb030', '#d8381e'], w);
-    flame(-34, -52, -78, -112, 9, ['#fff3a0', '#ff9a30', '#c83a1e'], -w);
-    flame(-36, -56, -66, -100, 5, ['#fffbe0', '#ffe070', '#ffa040'], w * 0.5);
-    leg(-28, -36, 11, 36, '#a6381a'); leg(-13, -36, 11, 36, '#a6381a');
-    B(); el(0, -54, 44, 23); fs(rg(0, -54, 46, '#ff9a55', '#c4401c'));
-    B(); el(24, -48, 14, 15); fs('#ffe8c8', 0);
-    leg(20, -36, 11, 36, '#d4501f'); leg(35, -36, 11, 36, '#d4501f');
-    for (let k = 0; k < 6; k++) { const a = -2.6 + k * 0.42; flame(32 + Math.cos(a) * 12, -74 + Math.sin(a) * 10, 32 + Math.cos(a) * 34, -74 + Math.sin(a) * 30 - 8, 6, ['#fff3a0', '#ffa030', '#d8381e'], Math.sin(t * 9 + k) * 3); }
-    B(); ctx.moveTo(38, -96); ctx.lineTo(30, -134); ctx.lineTo(52, -102); ctx.closePath(); fs('#e8642c');
-    B(); ctx.moveTo(52, -100); ctx.lineTo(64, -136); ctx.lineTo(66, -96); ctx.closePath(); fs('#e8642c');
-    B(); el(50, -88, 22, 17); fs(rg(50, -88, 24, '#ffb070', '#cc4a1e'));
-    B(); el(70, -82, 13, 8); fs('#ffe8c8');
-    B(); el(81, -84, 3.6, 3); fs(INK, 0);
-    eye(56, -93, 4.6);
-    B(); ctx.moveTo(44, -86); ctx.lineTo(36, -80); ctx.lineTo(46, -79); fs('#ffd860', 1.5);
-  },
-  retoni(t) {
-    const sw = Math.sin(t * 3) * 0.12;
-    B(); el(-12, -3, 11, 5); fs('#3f7a2a', 2.5); B(); el(14, -3, 11, 5); fs('#3f7a2a', 2.5);
-    B(); ctx.moveTo(-28, -40); ctx.quadraticCurveTo(-56, -52, -54, -66); ctx.quadraticCurveTo(-38, -60, -24, -48); ctx.closePath(); fs('#5fae3c');
-    B(); ctx.moveTo(-30, -10); ctx.bezierCurveTo(-36, -50, -12, -64, 4, -64); ctx.bezierCurveTo(22, -64, 38, -48, 33, -10); ctx.bezierCurveTo(28, 0, -26, 0, -30, -10); fs(rg(2, -34, 40, '#a8e870', '#4a9030'));
-    B(); el(7, -20, 17, 13); fs('#dcf6b4', 0);
-    B(); ctx.moveTo(30, -42); ctx.quadraticCurveTo(54, -50, 56, -66); ctx.quadraticCurveTo(40, -62, 28, -50); ctx.closePath(); fs('#5fae3c');
-    tube(() => { ctx.moveTo(4, -62); ctx.quadraticCurveTo(0, -74, 4, -84); }, 4, '#4f9a35');
-    ctx.save(); ctx.translate(4, -84); ctx.rotate(sw);
-    B(); el(-10, -4, 12, 6, -0.5); fs('#7ccf4f'); B(); el(10, -6, 12, 6, 0.5); fs('#8fdc5c'); ctx.restore();
-    eye(11, -38, 4.6); eye(25, -37, 4.6);
-    B(); ctx.arc(18, -30, 4, 0.2, Math.PI - 0.2); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
-    B(); el(5, -30, 4, 2.4); fs('rgba(255,120,140,0.6)', 0); B(); el(31, -30, 3.4, 2.2); fs('rgba(255,120,140,0.6)', 0);
-  },
-  frondalce(t) {
-    const sw = Math.sin(t * 2) * 0.06;
-    leg(-28, -44, 8, 44, '#5a3e26'); leg(-15, -44, 8, 44, '#5a3e26');
-    B(); ctx.moveTo(-40, -60); ctx.quadraticCurveTo(-58, -66, -56, -78); ctx.quadraticCurveTo(-46, -70, -36, -66); fs('#5fae3c');
-    B(); el(0, -58, 42, 20); fs(rg(0, -58, 44, '#b08a5a', '#6a4a2c'));
-    for (let i = 0; i < 6; i++) { B(); el(-30 + i * 11, -74 + Math.abs(i - 2.5) * 1.5, 9, 6.5); fs(i % 2 ? '#6fbe46' : '#5fae3c', 2); }
-    B(); el(14, -52, 14, 9); fs('#e8dcc0', 0);
-    leg(22, -44, 8, 44, '#6a4a2c'); leg(35, -44, 8, 44, '#6a4a2c');
-    B(); ctx.moveTo(24, -66); ctx.lineTo(34, -104); ctx.lineTo(48, -100); ctx.lineTo(40, -62); ctx.closePath(); fs('#8a6a43');
-    ctx.save(); ctx.translate(44, -110); ctx.rotate(sw);
-    tube(() => { ctx.moveTo(-4, -8); ctx.lineTo(-14, -40); ctx.moveTo(-10, -26); ctx.lineTo(-26, -38); ctx.moveTo(4, -8); ctx.lineTo(14, -42); ctx.moveTo(10, -28); ctx.lineTo(28, -38); }, 4, '#7a5636');
-    for (const [lx, ly] of [[-14, -44], [-28, -40], [14, -46], [30, -40], [-4, -34]]) { B(); el(lx, ly, 8, 5, lx * 0.03); fs('#7ccf4f', 2); }
-    ctx.restore();
-    B(); ctx.moveTo(34, -114); ctx.quadraticCurveTo(24, -126, 22, -112); ctx.closePath(); fs('#5fae3c', 2);
-    B(); el(48, -108, 16, 12, 0.15); fs(rg(48, -108, 18, '#c49a66', '#7a5636'));
-    B(); el(64, -102, 8, 6); fs('#e8dcc0'); B(); el(70, -103, 2.6, 2.2); fs(INK, 0);
-    eye(52, -112, 3.6);
-  },
-  gotin(t) {
-    const w = Math.sin(t * 5) * 4;
-    B(); ctx.moveTo(-26, -24); ctx.quadraticCurveTo(-52, -42 + w, -70, -32 + w); ctx.quadraticCurveTo(-52, -14 + w * 0.5, -26, -14); ctx.closePath(); fs(lg(-70, 0, -26, 0, ['#9cd8ff', '#2f78c4']));
-    for (const lx of [-16, -4, 14, 26]) { B(); el(lx, -4, 6, 4); fs('#2f78c4', 2); }
-    B(); el(0, -20, 32, 14); fs(rg(0, -22, 34, '#7cc8ff', '#2a6cbc'));
-    B(); el(6, -12, 22, 5); fs('#c8ecff', 0);
-    for (let i = 0; i < 3; i++) { B(); el(20 - i * 5, -48 + i * 4, 11, 4, -0.9 + i * 0.4 + Math.sin(t * 4 + i) * 0.1); fs('#ff8fb8', 2); }
-    B(); el(32, -28, 19, 15); fs(rg(32, -30, 21, '#88d4ff', '#2f7ccc'));
-    eye(40, -31, 3.4);
-    B(); ctx.arc(42, -23, 5, 0.1, Math.PI - 0.6); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
-  },
-  mareon(t) {
-    const sw = Math.sin(t * 2.2) * 5;
-    B(); ctx.moveTo(-44, -14); ctx.quadraticCurveTo(-72, -30 + sw, -80, -16 + sw); ctx.quadraticCurveTo(-66, -2, -44, -6); ctx.closePath(); fs('#9cd8ff');
-    tube(() => { ctx.moveTo(-44, -10); ctx.bezierCurveTo(-24, 6, 22, 4, 26, -16); }, 22, '#2f78c4');
-    const path = () => { ctx.moveTo(24, -14); ctx.bezierCurveTo(44, -44, -8, -64, 8 + sw, -96); };
-    for (let i = 0; i < 6; i++) {
-      const u = 0.1 + i * 0.15, x = bz(24, 44, -8, 8 + sw, u), y = bz(-14, -44, -64, -96, u);
-      B(); ctx.moveTo(x - 10, y + 4); ctx.lineTo(x - 30, y - 6); ctx.lineTo(x - 8, y - 10); ctx.closePath(); fs('#bfe8ff', 2);
-    }
-    tube(path, 26, '#2f78c4');
-    B(); path(); ctx.lineWidth = 8; ctx.strokeStyle = '#9fd8ff'; ctx.stroke();
-    for (let i = 0; i < 3; i++) { B(); el(4 + sw - i * 6, -118 + i * 2, 12, 4, -1.1 + i * 0.4); fs('#ff8fb8', 2); }
-    B(); el(16 + sw, -104, 21, 16, 0.1); fs(rg(16 + sw, -106, 22, '#88d4ff', '#2a6cbc'));
-    B(); el(32 + sw, -98, 10, 6); fs('#c8ecff', 2);
-    eye(22 + sw, -108, 4.4);
-  },
-  musgorro(t) {
-    const br = Math.sin(t * 2) * 1.5;
-    B(); el(-22, -3, 9, 5); fs('#4a3a2c', 2.5); B(); el(20, -3, 9, 5); fs('#4a3a2c', 2.5);
-    B(); ctx.moveTo(-44, -6); ctx.bezierCurveTo(-48, -52 - br, 30, -64 - br, 42, -12); ctx.closePath(); fs(rg(-4, -30, 46, '#a39e86', '#4c473a'));
-    for (let i = 0; i < 7; i++) { const a = Math.PI + 0.35 + i * 0.4, x = Math.cos(a) * 36 - 3, y = -14 + Math.sin(a) * 38 - br; B(); el(x, y, 9, 7, a); fs(i % 2 ? '#78b84a' : '#5fa03a', 2); }
-    B(); el(-16, -24, 6, 5); fs('#b9b2a2', 2); B(); el(4, -34, 5, 4); fs('#c7c0b0', 2);
-    B(); ctx.moveTo(30, -26); ctx.quadraticCurveTo(56, -18, 44, -8); ctx.lineTo(28, -8); ctx.closePath(); fs('#c9b896');
-    B(); el(50, -16, 3.4, 3.4); fs(INK, 0);
-    eye(31, -22, 3.2);
-  },
-  charquillo(t) {
-    const pf = (Math.sin(t * 4) + 1) * 2;
-    B(); el(-18, -15, 18, 12, -0.3); fs('#2b8f8f'); B(); el(-6, -3, 15, 4); fs('#237777', 2.5);
-    B(); ctx.moveTo(-30, -8); ctx.bezierCurveTo(-34, -42, 32, -48, 40, -16); ctx.bezierCurveTo(42, -4, -20, -2, -30, -8); fs(rg(2, -26, 40, '#6ee0cc', '#1f7f86'));
-    B(); el(29, -12, 8 + pf, 6 + pf * 0.6); fs('#e6fff2', 2);
-    leg(22, -14, 7, 14, '#2b8f8f');
-    for (const [ex, ey] of [[7, -38], [25, -41]]) { B(); el(ex, ey, 9, 9); fs('#4fcab8'); eye(ex + 2, ey - 1, 4.2); }
-    B(); el(-10, -28, 4, 3); fs('#176a70', 0); B(); el(2, -20, 3, 2); fs('#176a70', 0); B(); el(-20, -18, 3, 2); fs('#176a70', 0);
-    B(); ctx.moveTo(18, -24); ctx.quadraticCurveTo(30, -18, 40, -22); ctx.lineWidth = 2; ctx.strokeStyle = INK; ctx.stroke();
-  },
-  ascuervo(t) {
-    const fl = Math.sin(t * 9), by = -46 + Math.sin(t * 3) * 4;
-    ctx.save(); ctx.translate(0, by);
-    B(); ctx.moveTo(-6, -24); ctx.quadraticCurveTo(-36, -58 - fl * 12, -62, -48 - fl * 18); ctx.lineTo(-50, -40 - fl * 12); ctx.lineTo(-56, -32 - fl * 8); ctx.lineTo(-40, -30 - fl * 5); ctx.lineTo(-42, -20); ctx.closePath(); fs('#2a2232');
-    for (const [a, l] of [[-0.2, 30], [0.1, 34], [0.4, 28]]) {
-      B(); ctx.moveTo(-18, -14); ctx.lineTo(-18 - Math.cos(a) * l, -10 + Math.sin(a) * l * 0.6 - 6); ctx.lineTo(-14 - Math.cos(a) * l, -6 + Math.sin(a) * l * 0.6); ctx.closePath(); fs('#3a3046', 2);
-      B(); el(-18 - Math.cos(a) * l, -8 + Math.sin(a) * l * 0.6 - 3, 5, 3, a); fs('#ff7a3a', 0);
-    }
-    B(); ctx.moveTo(-22, -14); ctx.bezierCurveTo(-20, -42, 18, -46, 26, -28); ctx.bezierCurveTo(28, -10, 0, 0, -22, -14); fs(rg(0, -26, 30, '#544a60', '#1c1724'));
-    B(); el(10, -20, 9, 8); fs(rg(10, -22, 10, '#ffd070', '#ff6a2a'), 0);
-    B(); ctx.moveTo(4, -6); ctx.lineTo(2, 4); ctx.moveTo(12, -6); ctx.lineTo(14, 4); ctx.lineWidth = 3; ctx.strokeStyle = GOLD; ctx.stroke();
-    flame(20, -40, 14, -60, 4, ['#fff3a0', '#ff9a30', '#d8381e'], Math.sin(t * 12) * 3);
-    B(); el(24, -34, 13, 11); fs(rg(24, -36, 14, '#5a5066', '#1c1724'));
-    B(); ctx.moveTo(34, -37); ctx.lineTo(52, -32); ctx.lineTo(34, -27); ctx.closePath(); fs(GOLD, 2.5);
-    B(); el(28, -37, 3.6, 3.6); fs('#ffb030', 0); B(); el(29, -38, 1.4, 1.4); fs('#fff', 0);
-    B(); ctx.moveTo(-2, -26); ctx.quadraticCurveTo(-22, -70 - fl * 14, -2, -82 - fl * 20); ctx.lineTo(4, -66 - fl * 14); ctx.lineTo(10, -70 - fl * 14); ctx.lineTo(12, -54 - fl * 8); ctx.lineTo(18, -54 - fl * 6); ctx.lineTo(12, -30); ctx.closePath(); fs('#3a3046');
-    B(); el(-2, -82 - fl * 20, 4, 3); fs('#ff7a3a', 0); B(); el(8, -68 - fl * 14, 3.5, 2.5); fs('#ff7a3a', 0);
-    ctx.restore();
-  },
-  zarzalma(t) {
-    const sw = Math.sin(t * 2.5) * 5;
-    const P0 = [-34, -6], P1 = [8, 10], P2 = [32, -8], P3 = [10, -40];
-    const Q1 = [-12, -64], Q2 = [-6, -84], Q3 = [14 + sw, -100];
-    const path = () => { ctx.moveTo(...P0); ctx.bezierCurveTo(...P1, ...P2, ...P3); ctx.bezierCurveTo(...Q1, ...Q2, ...Q3); };
-    tube(path, 17, '#2f6b3a');
-    B(); path(); ctx.lineWidth = 5; ctx.strokeStyle = '#4f9a4a'; ctx.stroke();
-    for (let i = 1; i < 12; i++) {
-      const u = i / 12, seg = u < 0.5 ? 0 : 1, v = seg ? (u - 0.5) * 2 : u * 2;
-      const pts = seg ? [P3, Q1, Q2, Q3] : [P0, P1, P2, P3];
-      const x = bz(pts[0][0], pts[1][0], pts[2][0], pts[3][0], v), y = bz(pts[0][1], pts[1][1], pts[2][1], pts[3][1], v);
-      const s = i % 2 ? 1 : -1;
-      B(); ctx.moveTo(x - 3, y); ctx.lineTo(x + s * 12, y - 6); ctx.lineTo(x + 3, y - 3); ctx.closePath(); fs('#e6edc0', 1.5);
-    }
-    B(); el(-14, -52, 12, 5, -0.6); fs('#5fae3c', 2); B(); el(24, -22, 11, 5, 0.6); fs('#6fbe46', 2);
-    const cx = 14 + sw, cy = -106;
-    for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3 + 0.3 + Math.sin(t * 3) * 0.05; B(); el(cx + Math.cos(a) * 15, cy + Math.sin(a) * 15, 13, 7, a); fs(rg(cx + Math.cos(a) * 15, cy + Math.sin(a) * 15, 14, '#ff8fc0', '#b0246a'), 2.5); }
-    B(); el(cx, cy, 11, 10); fs('#f6d36b');
-    eye(cx + 3, cy - 2, 3.2);
-    B(); ctx.moveTo(cx + 2, cy + 5); ctx.lineTo(cx + 10, cy + 4); ctx.lineTo(cx + 7, cy + 9); ctx.closePath(); fs('#fff', 1.5);
-  },
-  golem(t, o) {
-    const ph2 = o.phase === 2, br = Math.sin(t * 1.5) * 3;
-    const core = ph2 ? '#5ff2ff' : '#ffb030';
-    tube(() => { ctx.moveTo(-40, -70); ctx.quadraticCurveTo(-64, -30, -92, 0); ctx.moveTo(28, -70); ctx.quadraticCurveTo(44, -30, 76, 0); ctx.moveTo(-6, -60); ctx.quadraticCurveTo(-10, -24, 4, 0); }, 15, '#5a3e2a');
-    tube(() => { ctx.moveTo(-58, -176 + br); ctx.bezierCurveTo(-110, -170, -120, -120, -104, -78); ctx.moveTo(-50, -166 + br); ctx.bezierCurveTo(-96, -150, -96, -112, -90, -80); }, 11, '#6a4a30');
-    for (const [cx, cy, a] of [[-104, -76, 0.4], [-92, -78, -0.3]]) { B(); ctx.moveTo(cx, cy); ctx.lineTo(cx - 12 + a * 10, cy + 22); ctx.lineTo(cx + 4, cy + 6); ctx.closePath(); fs('#4a3020', 2); }
-    B();
-    const pts = [[-72, -186], [-22, -214], [50, -200], [82, -150], [62, -78], [-48, -66], [-82, -120]];
-    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y + br) : ctx.moveTo(x, y + br))); ctx.closePath();
-    fs(lg(-80, -210, 80, -70, ['#a29c88', '#6e6a5c', '#3e3c34']), 4);
-    ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(27,20,38,0.7)';
-    B(); ctx.moveTo(-40, -180 + br); ctx.lineTo(-24, -150 + br); ctx.lineTo(-38, -120 + br); ctx.moveTo(40, -170 + br); ctx.lineTo(28, -130 + br); ctx.lineTo(44, -100 + br); ctx.stroke();
-    if (ph2) {
-      ctx.save(); ctx.shadowColor = CYAN; ctx.shadowBlur = 12; ctx.lineWidth = 4; ctx.strokeStyle = '#7ff6ff';
-      B(); ctx.moveTo(-70, -150 + br); ctx.bezierCurveTo(-40, -140 + br, -30, -100 + br, 0, -110 + br); ctx.bezierCurveTo(30, -120 + br, 50, -90 + br, 70, -100 + br); ctx.stroke(); ctx.restore();
-    }
-    const pulse = 1 + Math.sin(t * 4) * 0.12;
-    ctx.save(); ctx.shadowColor = core; ctx.shadowBlur = 24;
-    B(); ctx.moveTo(4, -164 + br); ctx.lineTo(22 * pulse, -140 + br); ctx.lineTo(4, -114 + br); ctx.lineTo(-14 * pulse, -140 + br); ctx.closePath(); fs(core, 3); ctx.restore();
-    for (let i = 0; i < 6; i++) { B(); el(-60 + i * 14, -192 + Math.abs(i - 2.5) * 3 + br, 11, 8); fs(i % 2 ? '#6fae46' : '#5a9a3a', 2); }
-    B(); ctx.moveTo(56, -190 + br); ctx.lineTo(96, -176 + br); ctx.lineTo(108, -118 + br); ctx.lineTo(74, -110 + br); ctx.closePath(); fs('#8a8574', 3.5);
-    B(); el(116, -92 + br, 36, 32, 0.2); fs(rg(116, -96 + br, 38, '#b0aa94', '#585446'), 4);
-    ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(27,20,38,0.7)';
-    B(); ctx.moveTo(128, -116 + br); ctx.lineTo(136, -96 + br); ctx.moveTo(140, -104 + br); ctx.lineTo(146, -86 + br); ctx.stroke();
-    B(); ctx.moveTo(-24, -244 + br); ctx.lineTo(28, -240 + br); ctx.lineTo(32, -208 + br); ctx.lineTo(-26, -206 + br); ctx.closePath(); fs('#8f8a78', 3.5);
-    ctx.save(); ctx.shadowColor = core; ctx.shadowBlur = 14;
-    B(); el(4, -226 + br, 6, 3.5, 0.1); fs(core, 0); B(); el(22, -225 + br, 6, 3.5, -0.1); fs(core, 0); ctx.restore();
-    tube(() => { ctx.moveTo(-14, -244 + br); ctx.quadraticCurveTo(-22, -262, -10, -270); }, 3, '#4f9a35');
-    B(); el(-8, -272 + br, 9, 5, -0.4); fs('#7ccf4f', 2);
-  },
-  trainer(t, o) {
-    const ph = o.walk || 0, st = Math.sin(ph) * 5, bob = Math.abs(Math.sin(ph)) * 2;
-    leg(-6 + (o.walk ? st : 0), -20, 8, 20, '#3a2a30'); leg(5 - (o.walk ? st : 0), -20, 8, 20, '#3a2a30');
-    ctx.save(); ctx.translate(0, -bob);
-    B(); el(-14, -42, 9, 12, -0.3); fs('#b07a3a', 2); tube(() => { ctx.moveTo(-14, -52); ctx.lineTo(-6, -72); }, 2.5, '#7a5230');
-    B(); ctx.moveTo(-16, -16); ctx.lineTo(-11, -54); ctx.quadraticCurveTo(0, -60, 11, -54); ctx.lineTo(16, -16); ctx.quadraticCurveTo(0, -12, -16, -16); fs(lg(0, -58, 0, -16, ['#3a7090', '#244a66']));
-    B(); ctx.moveTo(-15, -18); ctx.quadraticCurveTo(0, -14, 15, -18); ctx.lineWidth = 3; ctx.strokeStyle = GOLD; ctx.stroke();
-    B(); ctx.moveTo(-10, -54); ctx.quadraticCurveTo(0, -50, 12, -55); ctx.lineTo(14, -48); ctx.quadraticCurveTo(0, -44, -10, -48); ctx.closePath(); fs(GOLD, 2);
-    B(); el(1, -66, 11, 11); fs('#f1c9a0');
-    B(); ctx.moveTo(-11, -66); ctx.quadraticCurveTo(-10, -82, 4, -80); ctx.quadraticCurveTo(14, -79, 12, -68); ctx.quadraticCurveTo(4, -74, -4, -70); ctx.quadraticCurveTo(-8, -62, -11, -66); fs('#5a3420', 2);
-    eye(6, -66, 1.8);
-    if (o.play) {
-      tube(() => { ctx.moveTo(4, -60); ctx.lineTo(32, -54); }, 4, '#d9b26a');
-      leg(14, -58, 7, 12, '#f1c9a0');
-    } else {
-      leg(11, -46, 7, 18, '#2c5878');
-    }
-    ctx.restore();
-  },
-};
-const FIG_W = sp => (SPECIES[sp] ? SPECIES[sp].w : 50);
-const FIG_H = sp => (SPECIES[sp] ? SPECIES[sp].h : 84);
-
-const off = document.createElement('canvas'); off.width = 1024; off.height = 1024;
-const offCtx = off.getContext('2d');
-function silhouette(sp, x, y, s, face, col, alpha, o = {}) {
-  offCtx.setTransform(1, 0, 0, 1, 0, 0); offCtx.clearRect(0, 0, 1024, 1024);
-  const saved = ctx; ctx = offCtx;
-  ctx.save(); ctx.translate(512, 960); ctx.scale(2 * s * face, 2 * s); DRAW[sp](o.t || 0, o); ctx.restore();
-  ctx.globalCompositeOperation = 'source-atop'; ctx.fillStyle = col; ctx.fillRect(0, 0, 1024, 1024); ctx.globalCompositeOperation = 'source-over';
-  ctx = saved;
-  ctx.save(); ctx.globalAlpha = clamp(alpha, 0, 1); ctx.drawImage(off, x - 256, y - 480, 512, 512); ctx.restore();
-}
-function drawFigure(sp, x, y, s, face, o = {}) {
-  ctx.save(); ctx.translate(x, y);
-  if (!o.noShadow) { B(); el(0, 2, FIG_W(sp) * s * 0.5, 10 * s); ctx.fillStyle = 'rgba(8,6,18,0.45)'; ctx.fill(); }
-  if (o.side) { B(); el(0, 2, FIG_W(sp) * s * 0.58, 14 * s); ctx.lineWidth = 3; ctx.strokeStyle = o.side === 'team' ? 'rgba(242,193,78,0.9)' : 'rgba(224,49,91,0.9)'; ctx.stroke(); }
-  if (o.alpha != null) ctx.globalAlpha = clamp(o.alpha, 0, 1);
-  if (o.rot) ctx.rotate(o.rot);
-  ctx.scale(s * face, s);
-  DRAW[sp](o.t || 0, o);
-  ctx.restore();
-  if (o.flash > 0) silhouette(sp, x, y, s, face, o.flashCol || '#fff', o.flash * (o.alpha == null ? 1 : o.alpha), o);
-}
+const CHEAP = params.get('render') === 'cheap'; // a headless shot or check: 3D would draw cheap; players never see it
+const events: unknown[] = []; // window.game.events: anything the game wants a run to see
 
 // ---- The run's state -------------------------------------------------------------------
-let scene, state, uidN = 1;
+let scene: string, state: RunState, uidN = 1;
 function reset() {
-  seed = Number(params.get('seed')) || CONFIG.seed;
+  setSeed(seedFrom(CONFIG.seed));
   uidN = 1;
   state = {
     t: 0, score: 0, gained: '', mode: 'starter', pick: 0,
@@ -599,29 +43,24 @@ function reset() {
     tut: { plan: false, atk: 0, def: 0, song: false },
     stats: { time: 0, battles: 0, perfects: 0, parries: 0, tamed: 0, falls: 0, released: 0 },
   };
-  placePlayer(0, ROOMS[0].spawn[0], ROOMS[0].spawn[1]);
+  placePlayer(0, ROOMS[0].spawn![0], ROOMS[0].spawn![1]);
 }
 const T = 64, OX = 0, OY = 8, WH = 26;
-function placePlayer(room, tx, ty) {
+function placePlayer(room: number, tx: number, ty: number) {
   state.room = room; const p = state.player; p.x = tx * T + OX; p.y = ty * T + OY; p.trail = [];
   for (let i = 0; i < 30; i++) p.trail.push([p.x - 1, p.y]);
 }
-function toast(s, d = 3) { state.toast = s; state.toastT = d; }
-function pop(textS, x, y, col = '#fff', size = 26, o = {}) {
+function toast(s: string, d = 3) { state.toast = s; state.toastT = d; }
+function pop(textS: string, x: number, y: number, col = '#fff', size = 26, o: Loose = {}) {
   state.fx.push({ k: 'pop', s: textS, x, y, vx: o.vx != null ? o.vx : (rng() - 0.5) * 120, vy: o.vy != null ? o.vy : -260, t: 0, life: o.life || 1.0, col, size, g: o.g != null ? o.g : 520 });
 }
-function burst(x, y, col, n = 12, sp = 220) {
+function burst(x: number, y: number, col: string, n = 12, sp = 220) {
   for (let i = 0; i < n; i++) { const a = (i / n) * TAU + rng() * 0.3, v = sp * (0.5 + rng() * 0.6); state.fx.push({ k: 'spark', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, life: 0.45 + rng() * 0.3, col }); }
 }
 
 // ---- Creatures ---------------------------------------------------------------------------
-const xpNeed = lv => tune.xp_need_base + tune.xp_need_per_level * lv;
-function calcStats(p) {
-  const s = SPECIES[p.sp], st = s.base.map((b, i) => b + s.grow[i] * (p.lv - 1));
-  p.maxhp = Math.round(st[0] * (p.boss ? tune.boss_hp_mult : 1)); p.atk = st[1]; p.def = st[2]; p.spd = st[3];
-}
-function makePet(sp, lv, o = {}) {
-  const p = { uid: uidN++, sp, lv, xp: 0, type: SPECIES[sp].type, moves: [], hp: 0, maxhp: 0, atk: 0, def: 0, spd: 0,
+function makePet(sp: string, lv: number, o: Loose = {}) {
+  const p: Pet = { uid: uidN++, sp, lv, xp: 0, type: SPECIES[sp].type, moves: [], hp: 0, maxhp: 0, atk: 0, def: 0, spd: 0,
     en: tune.en_start, last: 0, boss: !!o.boss, wild: !!o.wild, guard: false, cyc: 0, phase: 1, warn: false,
     flash: 0, ghost: 0, faintT: 0, hop: 0 };
   const L = SPECIES[sp].learn;
@@ -629,19 +68,19 @@ function makePet(sp, lv, o = {}) {
   while (p.moves.length > 4) p.moves.shift();
   calcStats(p); p.hp = p.maxhp; p.ghost = p.hp; return p;
 }
-const nameOf = p => SPECIES[p.sp].name;
-const alive = arr => arr.filter(p => p.hp > 0);
+const nameOf = (p: Pet): string => SPECIES[p.sp].name;
+const alive = (arr: Pet[]): Pet[] => arr.filter(p => p.hp > 0);
 
 // ---- Dungeon -----------------------------------------------------------------------------
-function tileAt(room, c, r) { const m = ROOMS[room].map; if (r < 0 || r >= m.length || c < 0 || c >= 20) return '#'; return m[r][c]; }
-function roomCleared(i) { return state.rooms[i].wilds.every(w => !w.alive); }
-function solid(c, r) {
+function tileAt(room: number, c: number, r: number) { const m = ROOMS[room].map; if (r < 0 || r >= m.length || c < 0 || c >= 20) return '#'; return m[r][c]; }
+function roomCleared(i: number) { return state.rooms[i].wilds.every(w => !w.alive); }
+function solid(c: number, r: number) {
   const ch = tileAt(state.room, c, r);
   if (ch === '#' || ch === 'P' || ch === '~' || ch === 'f') return true;
   if (ch === 'D') return !roomCleared(state.room);
   return false;
 }
-function canStand(x, y) {
+function canStand(x: number, y: number) {
   for (const [dx, dy] of [[-13, -9], [13, -9], [-13, 7], [13, 7]]) {
     if (solid(Math.floor((x + dx - OX) / T), Math.floor((y + dy - OY) / T))) return false;
   }
@@ -651,7 +90,7 @@ function fountainPos() { // the fountain lives in room 0
   const m = ROOMS[0].map; for (let r = 0; r < m.length; r++) { const c = m[r].indexOf('f'); if (c >= 0) return [c * T + OX + T / 2, r * T + OY + T / 2]; }
   return [0, 0];
 }
-function updDungeon(dt) {
+function updDungeon(dt: number) {
   const p = state.player;
   state.stats.time += dt;
   if (state.inv > 0) state.inv -= dt;
@@ -706,20 +145,20 @@ function updDungeon(dt) {
 const TEAM_SLOTS = [[392, 522], [264, 446], [226, 556], [116, 486]];
 const FOE_SLOTS = [[888, 522], [1016, 446], [1054, 556]];
 const BOSS_SLOT = [968, 566];
-const depthScale = y => 0.84 + (y - 440) / 120 * 0.2;
-function slot(side, i) {
-  const Bt = state.battle;
+const depthScale = (y: number): number => 0.84 + (y - 440) / 120 * 0.2;
+function slot(side: string, i: number) {
+  const Bt: Battle = state.battle;
   if (side === 'enemy' && Bt && Bt.boss) return BOSS_SLOT;
   return side === 'team' ? TEAM_SLOTS[i] : FOE_SLOTS[i];
 }
-function unit(side, i) { return side === 'team' ? state.team[i] : state.battle.enemies[i]; }
-function centerOf(side, i) { const [x, y] = slot(side, i), p = unit(side, i); return [x, y - FIG_H(p.sp) * depthScale(y) * (p.boss ? 0.55 : 0.48)]; }
-function groupCenter(side) {
-  const arr = side === 'team' ? state.team : state.battle.enemies; let sx = 0, sy = 0, n = 0;
+function unit(side: string, i: number) { return side === 'team' ? state.team[i] : state.battle.enemies[i]; }
+function centerOf(side: string, i: number) { const [x, y] = slot(side, i), p = unit(side, i); return [x, y - FIG_H(p.sp) * depthScale(y) * (p.boss ? 0.55 : 0.48)]; }
+function groupCenter(side: string) {
+  const arr: Pet[] = side === 'team' ? state.team : state.battle.enemies; let sx = 0, sy = 0, n = 0;
   arr.forEach((p, i) => { if (p.hp > 0) { const [x, y] = centerOf(side, i); sx += x; sy += y; n++; } });
   return n ? [sx / n, sy / n] : [640, 400];
 }
-function startBattle(wi) {
+function startBattle(wi: number) {
   const w = state.rooms[state.room].wilds[wi];
   const enemies = w.group.map(([sp, lv]) => makePet(sp, Math.max(1, (w.boss ? tune.boss_level : lv) + tune.enemy_level_offset), { wild: true, boss: w.boss }));
   state.battle = { phase: 'intro', t: 0, en: tune.en_start, gain: 0, enemies, boss: w.boss, wi, round: 0, cur: 0, sel: 0, tgt: 0, plans: [], queue: [], act: null, strip: [], banner: '', bannerT: 0, warnShown: false, uids: state.team.map(p => p.uid), phase2Said: false };
@@ -728,7 +167,7 @@ function startBattle(wi) {
   state.battle.banner = w.boss ? '¡El Gólem Raíz despierta!' : (enemies.length > 1 ? `¡Un grupo de ${enemies.length} criaturas salvajes!` : `¡Un ${nameOf(enemies[0])} salvaje!`);
   state.battle.bannerT = 1.6;
 }
-function chooseIntent(e) {
+function chooseIntent(e: Pet) {
   if (e.boss) {
     const pat = e.phase === 2 ? ['marejada', 'marejada', 'terremoto'] : ['puno_raiz', 'puno_raiz', 'terremoto'];
     const m = pat[e.cyc % 3]; e.warn = (e.cyc % 3) === 1; e.cyc++;
@@ -741,7 +180,7 @@ function chooseIntent(e) {
   for (let i = 0; i < ms.length; i++) { r -= wts[i]; if (r <= 0) { m = ms[i]; break; } }
   return { move: m, target: MOVES[m].target === 'one' ? pickTarget(MOVES[m]) : -1 };
 }
-function pickTarget(m) {
+function pickTarget(m: Move) {
   const opts = state.team.map((p, i) => i).filter(i => state.team[i].hp > 0);
   if (!opts.length) return 0;
   const strong = opts.filter(i => typeMult(m.type, state.team[i].type) > 1);
@@ -749,13 +188,13 @@ function pickTarget(m) {
   return opts[Math.floor(rng() * opts.length)];
 }
 function speedStrip() {
-  const list = [];
+  const list: { side: string; i: number; spd: number }[] = [];
   state.team.forEach((p, i) => { if (p.hp > 0) list.push({ side: 'team', i, spd: p.spd }); });
-  state.battle.enemies.forEach((p, i) => { if (p.hp > 0) list.push({ side: 'enemy', i, spd: p.spd }); });
+  state.battle.enemies.forEach((p: Pet, i: number) => { if (p.hp > 0) list.push({ side: 'enemy', i, spd: p.spd }); });
   list.sort((a, b) => b.spd - a.spd); return list.map(x => ({ side: x.side, i: x.i, done: false }));
 }
 function newRound() {
-  const Bt = state.battle; Bt.round++;
+  const Bt: Battle = state.battle; Bt.round++;
   for (const p of state.team) p.guard = false;
   if (Bt.round > 1) { // the shared pool: a flat en_regen each new round
     const before = Bt.en; Bt.en = Math.min(tune.en_max, Bt.en + tune.en_regen); Bt.gain = Bt.en - before;
@@ -770,29 +209,29 @@ function newRound() {
   const boss = Bt.enemies.find(e => e.boss && e.hp > 0);
   if (boss && boss.warn) { sfx('warn'); Bt.banner = '¡El Gólem Raíz carga TERREMOTO para el próximo turno!'; Bt.bannerT = 2.6; }
 }
-function targetOptions(p, m) { // sorted top to bottom on screen, so Up and Down move along them
-  const Bt = state.battle, byY = side => (a, b) => slot(side, a)[1] - slot(side, b)[1];
+function targetOptions(p: Pet, m: Move) { // sorted top to bottom on screen, so Up and Down move along them
+  const Bt: Battle = state.battle, byY = (side: string) => (a: number, b: number) => slot(side, a)[1] - slot(side, b)[1];
   if (m.target === 'one') return Bt.enemies.map((e, i) => i).filter(i => Bt.enemies[i].hp > 0).sort(byY('enemy'));
   if (m.target === 'ally') return state.team.map((q, i) => i).filter(i => state.team[i].hp > 0).sort(byY('team'));
   return [];
 }
-function reservedEn() { const Bt = state.battle; return Bt.plans.reduce((s, pl) => s + (pl ? MOVES[pl.move].en : 0), 0); }
+function reservedEn() { const Bt: Battle = state.battle; return Bt.plans.reduce((s, pl) => s + (pl ? MOVES[pl.move].en : 0), 0); }
 function availEn() { return Math.max(0, state.battle.en - reservedEn()); }
 function enterPet() {
-  const Bt = state.battle, p = state.team[Bt.cur];
+  const Bt: Battle = state.battle, p = state.team[Bt.cur];
   Bt.sel = clamp(p.last || 0, 0, p.moves.length - 1);
   if (MOVES[p.moves[Bt.sel]].en > availEn()) Bt.sel = p.moves.findIndex(id => MOVES[id].en <= availEn());
   if (Bt.sel < 0) Bt.sel = 0;
   defaultTarget();
 }
 function defaultTarget() {
-  const Bt = state.battle, p = state.team[Bt.cur], m = MOVES[p.moves[Bt.sel]], opts = targetOptions(p, m);
+  const Bt: Battle = state.battle, p = state.team[Bt.cur], m = MOVES[p.moves[Bt.sel]], opts = targetOptions(p, m);
   if (m.target === 'ally') { let best = opts[0]; for (const i of opts) if (state.team[i].hp / state.team[i].maxhp < state.team[best].hp / state.team[best].maxhp) best = i; Bt.tgt = Math.max(0, opts.indexOf(best)); }
   else if (m.target === 'one') { let bi = 0, bv = -1; opts.forEach((ei, k) => { const v = typeMult(m.type, Bt.enemies[ei].type); if (v > bv) { bv = v; bi = k; } }); Bt.tgt = bi; }
   else Bt.tgt = 0;
 }
 function updPlan() {
-  const Bt = state.battle, p = state.team[Bt.cur];
+  const Bt: Battle = state.battle, p = state.team[Bt.cur];
   const n = p.moves.length;
   if (tap('left')) { Bt.sel = (Bt.sel + n - 1) % n; defaultTarget(); sfx('select'); }
   if (tap('right')) { Bt.sel = (Bt.sel + 1) % n; defaultTarget(); sfx('select'); }
@@ -822,15 +261,15 @@ function updPlan() {
   }
 }
 function startExec() {
-  const Bt = state.battle, list = [];
+  const Bt: Battle = state.battle, list: QueueEntry[] = [];
   state.team.forEach((p, i) => { if (p.hp > 0 && Bt.plans[i]) list.push({ side: 'team', i, move: Bt.plans[i].move, target: Bt.plans[i].target, spd: p.spd }); });
   Bt.enemies.forEach((e, i) => { if (e.hp > 0 && e.intent) list.push({ side: 'enemy', i, move: e.intent.move, target: e.intent.target, spd: e.spd }); });
   for (const a of list) { a.pri = MOVES[a.move].kind === 'guard' ? 1 : 0; a.tie = rng(); }
-  list.sort((a, b) => (b.pri - a.pri) || (b.spd - a.spd) || (a.tie - b.tie));
+  list.sort((a, b) => (b.pri! - a.pri!) || (b.spd - a.spd) || (a.tie! - b.tie!));
   Bt.queue = list; Bt.strip = list.map(a => ({ side: a.side, i: a.i, done: false }));
   Bt.phase = 'exec'; Bt.act = null; Bt.stripIdx = -1;
 }
-function buildAction(q) {
+function buildAction(q: Loose) {
   const m = MOVES[q.move], Bt = state.battle, actor = unit(q.side, q.i);
   if (m.en && q.side === 'team') Bt.en = Math.max(0, Bt.en - m.en); // spent from the shared pool as it acts
   if (m.gain && q.side === 'team') { // a free move recharges the pool
@@ -839,11 +278,11 @@ function buildAction(q) {
   }
   let target = q.target;
   if (m.target === 'one') {
-    const arr = q.side === 'team' ? Bt.enemies : state.team;
+    const arr: Pet[] = q.side === 'team' ? Bt.enemies : state.team;
     if (!arr[target] || arr[target].hp <= 0) { target = arr.findIndex(p => p.hp > 0); if (q.side === 'enemy' && target >= 0) target = pickTarget(m); }
   }
   if (m.target === 'ally' && (!state.team[target] || state.team[target].hp <= 0)) target = state.team.findIndex(p => p.hp > 0);
-  const a = { side: q.side, i: q.i, move: q.move, target, t: 0, hits: [], end: 0, approach: 0.3 };
+  const a: Action = { side: q.side, i: q.i, move: q.move, target, t: 0, hits: [], end: 0, approach: 0.3 };
   let ringT = (q.side === 'team' ? tune.ring_attack : tune.ring_defend) * (m.ring || 1);
   if (actor.boss && actor.phase === 2) ringT *= tune.boss_phase2_speed;
   if (m.kind === 'guard') { a.end = 0.8; a.approach = 0; }
@@ -860,18 +299,14 @@ function buildAction(q) {
   Bt.banner = `${nameOf(actor)}${actor.wild && !actor.boss ? ' salvaje' : ''} usa ${m.name}`; Bt.bannerT = 1.2; Bt.bannerCol = TYPES[m.type].col;
   return a;
 }
-function calcDmg(a, d, m, pow) {
-  const base = (pow != null ? pow : m.pow) * (a.atk / (a.atk + d.def)) * tune.dmg_scale;
-  return Math.max(1, Math.round(base * typeMult(m.type, d.type) * (0.9 + rng() * 0.2)));
-}
-function hurt(p, side, i, dmg, col) {
+function hurt(p: Pet, side: string, i: number, dmg: number, col: string) {
   p.hp = Math.max(0, p.hp - dmg); p.flash = 1;
   const [x, y] = centerOf(side, i);
   pop(String(dmg), x + (rng() - 0.5) * 30, y - 20, col, dmg >= 20 ? 40 : 30);
   if (p.hp <= 0) { sfx('faint'); p.faintT = 0; pop('¡Debilitado!', x, y - 60, '#ffd0d8', 22, { vy: -80, g: 0, life: 1.4, vx: 0 }); }
 }
-function judge(a, h, res) {
-  const Bt = state.battle, m = MOVES[a.move], actor = unit(a.side, a.i);
+function judge(a: Loose, h: Loose, res: string) {
+  const Bt: Battle = state.battle, m = MOVES[a.move], actor = unit(a.side, a.i);
   h.judged = true; h.res = res;
   const [rx, ry] = ringCenter(a);
   if (a.side === 'team') {
@@ -927,15 +362,15 @@ function judge(a, h, res) {
     }
   }
 }
-function ringCenter(a) {
+function ringCenter(a: Loose) {
   const m = MOVES[a.move];
   if (m.kind === 'heal') return centerOf('team', Math.max(0, a.target));
   const victimSide = a.side === 'team' ? 'enemy' : 'team';
   if (m.target === 'all') return groupCenter(victimSide);
   return centerOf(victimSide, Math.max(0, a.target));
 }
-function updExec(dt) {
-  const Bt = state.battle;
+function updExec(dt: number) {
+  const Bt: Battle = state.battle;
   if (!Bt.act) {
     if (checkEnd()) return;
     const q = Bt.queue.shift();
@@ -987,13 +422,13 @@ function updExec(dt) {
   }
 }
 function checkEnd() {
-  const Bt = state.battle;
+  const Bt: Battle = state.battle;
   if (Bt.enemies.every(e => e.hp <= 0)) { Bt.phase = 'win'; Bt.t = 0; sfx('fanfare'); return true; }
   if (state.team.every(p => p.hp <= 0)) { Bt.phase = 'lose'; Bt.t = 0; sfx('lose'); return true; }
   return false;
 }
-function updBattle(dt) {
-  const Bt = state.battle; Bt.t += dt; state.stats.time += dt;
+function updBattle(dt: number) {
+  const Bt: Battle = state.battle; Bt.t += dt; state.stats.time += dt;
   if (Bt.bannerT > 0) Bt.bannerT -= dt;
   for (const p of [...state.team, ...Bt.enemies]) {
     if (p.flash > 0) p.flash = Math.max(0, p.flash - dt * 4);
@@ -1007,7 +442,7 @@ function updBattle(dt) {
   if (Bt.phase === 'lose') { if (Bt.t > 2.6 || (Bt.t > 1 && tap('ok'))) afterLose(); return; }
 }
 function afterWin() {
-  const Bt = state.battle;
+  const Bt: Battle = state.battle;
   const w = state.rooms[state.room].wilds[Bt.wi]; w.alive = false;
   if (roomCleared(state.room) && state.room < ROOMS.length - 1) Bt.doorNews = true;
   const cands = Bt.boss ? [] : Bt.enemies.map((e, i) => i);
@@ -1022,7 +457,7 @@ function afterLose() {
   state.stats.falls++;
   for (const p of state.team) { p.hp = p.maxhp; p.ghost = p.hp; p.en = tune.en_start; p.faintT = 0; }
   state.battle = null; state.mode = 'dungeon'; state.inv = 2; state.fade = 0.8;
-  placePlayer(0, ROOMS[0].spawn[0], ROOMS[0].spawn[1]);
+  placePlayer(0, ROOMS[0].spawn![0], ROOMS[0].spawn![1]);
   toast('Despiertas junto a la fuente. Tu equipo está curado y no has perdido nada.', 4);
 }
 
@@ -1032,12 +467,12 @@ const LANE_COL = ['#ff8fb8', '#5ff2ff', '#9cff7a', '#ffd36b'];
 const LANE_KEYS = [['ArrowLeft', 'KeyA'], ['ArrowDown', 'KeyS'], ['ArrowUp', 'KeyW'], ['ArrowRight', 'KeyD']];
 const SCALE = [262, 294, 330, 392, 440, 523, 587, 659, 784, 880];
 function teamAvgLv() { return state.team.reduce((s, p) => s + p.lv, 0) / Math.max(1, state.team.length); }
-function songLen(e) {
+function songLen(e: Pet) {
   const rare = SPECIES[e.sp].rarity === 'rara';
   return clamp(Math.round((rare ? tune.song_base_rara : tune.song_base_comun) + tune.song_per_level * (e.lv - teamAvgLv())), tune.song_min, tune.song_max);
 }
 function beginSong() {
-  const S = state.song, e = state.battle.enemies[S.cands[S.pick]], rare = SPECIES[e.sp].rarity === 'rara';
+  const S: Song = state.song, e = state.battle.enemies[S.cands[S.pick]], rare = SPECIES[e.sp].rarity === 'rara';
   const n = songLen(e), beat = 60 / (tune.song_bpm + (rare ? tune.song_bpm_rare_bonus : 0));
   const notes = []; let at = tune.song_travel + 0.9, prev = -1, prev2 = -2;
   for (let k = 0; k < n; k++) {
@@ -1049,19 +484,19 @@ function beginSong() {
   }
   Object.assign(S, { phase: 'play', t: 0, e, notes, beat, score: 0, perfect: 0, good: 0, miss: 0, flashL: [0, 0, 0, 0], ticks: 0 });
 }
-function songJudge(note, res) {
-  const S = state.song; note.judged = true; note.res = res;
+function songJudge(note: Loose, res: string) {
+  const S: Song = state.song; note.judged = true; note.res = res;
   const y = laneY(note.lane, SONG_HX);
   if (res === 'perfect') { S.perfect++; S.score += 1; tone(note.f, 0.32, 'triangle', 0.24); tone(note.f * 2, 0.2, 'sine', 0.08); burst(SONG_HX, y, LANE_COL[note.lane], 10, 180); pop('¡Perfecta!', SONG_HX + 70, y, LANE_COL[note.lane], 20, { vx: 40, vy: -30, g: 0, life: 0.6 }); }
   else if (res === 'good') { S.good++; S.score += 0.6; tone(note.f, 0.25, 'triangle', 0.18); burst(SONG_HX, y, LANE_COL[note.lane], 6, 120); pop('Bien', SONG_HX + 60, y, '#e8f8ff', 18, { vx: 40, vy: -30, g: 0, life: 0.5 }); }
   else { S.miss++; tone(note.f * 0.5, 0.18, 'sawtooth', 0.08, 0, 0.8); pop('Falla', SONG_HX + 60, y, '#b0a8c0', 18, { vx: 40, vy: -30, g: 0, life: 0.5 }); }
 }
-function laneY(l, x) {
-  const S = state.song; const tt = S ? S.t : 0;
+function laneY(l: number, x: number) {
+  const S: Song = state.song; const tt = S ? S.t : 0;
   return 262 + l * 56 + Math.sin(x / 150 + tt * 2) * 9 * clamp((SONG_HX - x) / 260, 0, 1);
 }
-function updSong(dt) {
-  const S = state.song; S.t += dt;
+function updSong(dt: number) {
+  const S: Song = state.song; S.t += dt;
   if (S.phase === 'offer') {
     if (S.cands.length > 1) {
       if (tap('left')) { S.pick = (S.pick + S.cands.length - 1) % S.cands.length; sfx('select'); }
@@ -1115,20 +550,20 @@ function updSong(dt) {
     }
   }
 }
-function recruit(e) {
+function recruit(e: Pet) {
   const p = makePet(e.sp, e.lv); p.hp = p.maxhp; p.ghost = p.hp; return p;
 }
 
 // ---- Tally, learning, evolution ----------------------------------------------------------
-function startTally(bonus) {
-  const Bt = state.battle;
+function startTally(bonus: number) {
+  const Bt: Battle = state.battle;
   let total = bonus;
   for (const e of Bt.enemies) total += tune.xp_per_level * e.lv * (e.boss ? tune.boss_xp_mult : 1);
-  const rows = [], post = [];
+  const rows: TallyRow[] = [], post: PostStep[] = [];
   for (const p of state.team) {
     if (!Bt.uids.includes(p.uid)) { rows.push({ uid: p.uid, gain: 0, newbie: true, from: p.lv, to: p.lv, x0: p.xp / xpNeed(p.lv), lines: [] }); continue; }
     const gain = p.hp > 0 ? total : Math.round(total / 2);
-    const row = { uid: p.uid, gain, from: p.lv, x0: p.xp / xpNeed(p.lv), lines: [] };
+    const row = { uid: p.uid, gain, from: p.lv, x0: p.xp / xpNeed(p.lv), lines: [] } as unknown as TallyRow;
     p.xp += gain;
     while (p.xp >= xpNeed(p.lv)) {
       p.xp -= xpNeed(p.lv); const old = { hp: p.maxhp, atk: p.atk, def: p.def };
@@ -1152,7 +587,7 @@ function nextPost() {
   else if (nx.k === 'evolve') { state.evo = { uid: nx.uid, from: p.sp, to: SPECIES[p.sp].evo, t: 0, done: false }; state.mode = 'evolve'; sfx('evolve'); }
 }
 function finishBattle() {
-  const Bt = state.battle;
+  const Bt: Battle = state.battle;
   if (Bt && Bt.boss) {
     state.gained = '¡El Gólem Raíz descansa en paz!'; state.score = state.stats.perfects + state.stats.parries;
     state.mode = 'dungeon'; scene = 'results'; state.resultsT = 0; sfx('join'); return;
@@ -1165,22 +600,22 @@ function finishBattle() {
   state.battle = null; state.tally = null; state.mode = 'dungeon'; state.inv = 1.2; state.fade = 0.35;
   if (news) { toast('Las zarzas se retiran: el camino sigue hacia el este.', 3); sfx('door'); }
 }
-function updTally(dt) {
-  const TL = state.tally; TL.t += dt;
+function updTally(dt: number) {
+  const TL: Tally = state.tally; TL.t += dt;
   if (TL.t > 0.4 && tap('ok')) { if (TL.t < 1.6) TL.t = 1.6; else { state.tally = null; nextPost(); } }
 }
-function updLearn(dt) {
-  const L = state.learn, p = state.team.find(q => q.uid === L.uid); L.t += dt;
+function updLearn(dt: number) {
+  const L = state.learn, p = state.team.find(q => q.uid === L.uid)!; L.t += dt;
   const d = digit();
   if (d >= 0 && d < p.moves.length) {
     const old = p.moves[d]; p.moves[d] = L.move; toast(`${nameOf(p)} olvida ${MOVES[old].name} y aprende ${MOVES[L.move].name}.`, 3); sfx('level');
     state.learn = null; nextPost();
   } else if (tap('back')) { toast(`${nameOf(p)} no aprende ${MOVES[L.move].name}.`, 2); state.learn = null; nextPost(); }
 }
-function updEvolve(dt) {
+function updEvolve(dt: number) {
   const E = state.evo; E.t += dt;
   if (!E.done && E.t > 3.2) {
-    const p = state.team.find(q => q.uid === E.uid); const ratio = p.hp / p.maxhp;
+    const p = state.team.find(q => q.uid === E.uid)!; const ratio = p.hp / p.maxhp;
     p.sp = E.to; calcStats(p); p.hp = Math.max(1, Math.round(p.maxhp * Math.max(ratio, 0.5))); p.ghost = p.hp;
     E.done = true; E.t = 3.2; sfx('join'); burst(640, 380, '#fff3a0', 30, 340);
   }
@@ -1200,7 +635,7 @@ function updStarter() {
 }
 
 // ---- Drawing: dungeon --------------------------------------------------------------------
-function drawFloorTile(c, r, ch, th) {
+function drawFloorTile(c: number, r: number, ch: string, th: Theme) {
   const x = OX + c * T, y = OY + r * T, h = hash(c + state.room * 31, r);
   if (ch === '~') {
     ctx.fillStyle = '#16344a'; ctx.fillRect(x, y, T, T);
@@ -1220,7 +655,7 @@ function drawFloorTile(c, r, ch, th) {
   }
   if (ch === 'D' || ch === 'L') { ctx.fillStyle = lg(ch === 'D' ? x : x + T, 0, ch === 'D' ? x + T : x, 0, ['rgba(0,0,0,0)', 'rgba(5,4,12,0.85)']); ctx.fillRect(x, y, T, T); }
 }
-function drawWallTile(c, r, th) {
+function drawWallTile(c: number, r: number, th: Theme) {
   const x = OX + c * T, y = OY + r * T;
   const below = tileAt(state.room, c, r + 1);
   ctx.fillStyle = lg(0, y - WH, 0, y - WH + T, ['#6a7773', '#55625e']); ctx.fillRect(x, y - WH, T, T);
@@ -1234,12 +669,12 @@ function drawWallTile(c, r, th) {
     ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(x, y + T, T, 8);
   }
 }
-function drawDoorVines(c, r) {
+function drawDoorVines(c: number, r: number) {
   const x = OX + c * T, y = OY + r * T;
   tube(() => { for (let k = 0; k < 3; k++) { ctx.moveTo(x + 10 + k * 18, y - 6); ctx.bezierCurveTo(x + 30 - k * 8, y + 20, x + k * 20, y + 40, x + 14 + k * 16, y + T); } }, 6, '#3f6b2f');
   for (let k = 0; k < 7; k++) { const tx = x + 8 + hash(c, k + r) * 48, ty = y + 6 + hash(k, r + c) * 52; B(); ctx.moveTo(tx, ty); ctx.lineTo(tx + 9, ty - 4); ctx.lineTo(tx + 2, ty + 4); ctx.closePath(); fs('#e6edc0', 1.5); }
 }
-function drawPillar(c, r) {
+function drawPillar(c: number, r: number) {
   const cx = OX + c * T + T / 2, base = OY + r * T + T * 0.8;
   B(); el(cx, base, 28, 10); ctx.fillStyle = 'rgba(5,4,12,0.45)'; ctx.fill();
   B(); ctx.rect(cx - 21, base - 100, 42, 100); fs(lg(cx - 21, 0, cx + 21, 0, ['#9aa59e', '#6d7873', '#3e4744']));
@@ -1248,7 +683,7 @@ function drawPillar(c, r) {
   tube(() => { ctx.moveTo(cx - 18, base - 90); ctx.bezierCurveTo(cx + 10, base - 70, cx - 20, base - 40, cx + 14, base - 14); }, 4, '#4f8a35');
   B(); el(cx - 4, base - 66, 7, 4, 0.5); fs('#6fbe46', 1.5);
 }
-function drawFountain(cx, cy) {
+function drawFountain(cx: number, cy: number) {
   B(); el(cx, cy + 22, 44, 14); ctx.fillStyle = 'rgba(5,4,12,0.4)'; ctx.fill();
   B(); el(cx, cy + 4, 40, 18); fs('#8a958f');
   ctx.fillStyle = '#5d6863'; ctx.fillRect(cx - 40, cy + 4, 80, 16); ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.strokeRect(cx - 40, cy + 4, 80, 16);
@@ -1259,7 +694,7 @@ function drawFountain(cx, cy) {
   ctx.strokeStyle = 'rgba(190,250,255,0.85)'; ctx.lineWidth = 3;
   for (const s of [-1, 1]) { B(); ctx.moveTo(cx, cy - 34); ctx.quadraticCurveTo(cx + s * 22, cy - 46 + Math.sin(state.t * 6) * 2, cx + s * 26, cy); ctx.stroke(); }
 }
-function drawTorch(x, y) {
+function drawTorch(x: number, y: number) {
   B(); ctx.rect(x - 4, y, 8, 18); fs('#5a3e26', 2);
   flame(x, y + 2, x, y - 22, 6, ['#fff3a0', '#ffb030', '#e2452a'], Math.sin(state.t * 12 + x) * 2);
 }
@@ -1315,7 +750,7 @@ function drawDungeon() {
   txt(obj, W - 10 - ow / 2, 30, 16, '#f4ead0', 'center', true);
   drawTeamStrip(652);
 }
-function drawTeamStrip(y) {
+function drawTeamStrip(y: number) {
   ctx.fillStyle = 'rgba(10,9,20,0.92)'; ctx.fillRect(0, y - 4, W, H - y + 4);
   ctx.fillStyle = GOLD; ctx.fillRect(0, y - 4, W, 2);
   state.team.forEach((p, i) => {
@@ -1333,7 +768,7 @@ function drawTeamStrip(y) {
     ctx.fillStyle = '#2a2440'; ctx.fillRect(x + 70, y + 48, 160, 4); ctx.fillStyle = '#7fc8ff'; ctx.fillRect(x + 70, y + 48, 160 * xr, 4);
   });
 }
-function hpBar(x, y, w, h, p) {
+function hpBar(x: number, y: number, w: number, h: number, p: Pet) {
   ctx.fillStyle = '#1a1424'; B(); ctx.roundRect(x - 2, y - 2, w + 4, h + 4, 4); ctx.fill();
   const r = clamp(p.hp / p.maxhp, 0, 1), g = clamp(p.ghost / p.maxhp, 0, 1);
   ctx.fillStyle = '#ffe0e8'; ctx.fillRect(x, y, w * g, h);
@@ -1342,7 +777,7 @@ function hpBar(x, y, w, h, p) {
 }
 
 // ---- Drawing: battle ---------------------------------------------------------------------
-function drawArena(th) {
+function drawArena(th: Theme) {
   ctx.fillStyle = lg(0, 0, 0, 330, [th.wallBot, th.wallTop, th.wallBot]); ctx.fillRect(0, 0, W, 340);
   for (let i = 0; i < 6; i++) {
     const x = -60 + i * 250;
@@ -1364,8 +799,8 @@ function drawArena(th) {
   for (const [cx, cy] of [[300, 510], [960, 510]]) { B(); el(cx, cy, 230, 70); ctx.stroke(); B(); el(cx, cy, 200, 58); ctx.setLineDash([10, 12]); ctx.stroke(); ctx.setLineDash([]); }
   ctx.restore();
 }
-function dashOffset(side, i) {
-  const Bt = state.battle, a = Bt && Bt.act;
+function dashOffset(side: string, i: number) {
+  const Bt: Battle = state.battle, a = Bt && Bt.act;
   if (!a || a.side !== side || a.i !== i) return [0, 0];
   const m = MOVES[a.move]; if (m.kind === 'guard') return [0, -Math.sin(clamp(a.t / 0.8, 0, 1) * Math.PI) * 14];
   if (m.kind === 'heal') return [0, -Math.sin(clamp(a.t / a.end, 0, 1) * Math.PI) * 10];
@@ -1376,7 +811,7 @@ function dashOffset(side, i) {
   let lunge = 0; for (const h of a.hits) { const d = a.t - h.impact; if (d > -0.08 && d < 0.12) lunge = Math.max(lunge, 1 - Math.abs(d) / 0.12); }
   return [(tx - sx) * reach * u + (tx > sx ? 1 : -1) * lunge * 26, (ty + 60 - sy) * 0.25 * u];
 }
-function drawUnit(side, i) {
+function drawUnit(side: string, i: number) {
   const p = unit(side, i); if (!p) return;
   if (p.hp <= 0 && side === 'enemy' && p.faintT > 0.9) return;
   const [bx, by] = slot(side, i), [dx, dy] = dashOffset(side, i);
@@ -1393,7 +828,7 @@ function drawUnit(side, i) {
     ctx.fillStyle = 'rgba(120,200,255,0.25)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#9fd8ff'; ctx.stroke(); ctx.restore();
   }
 }
-function drawUnitBars(side, i) {
+function drawUnitBars(side: string, i: number) {
   const p = unit(side, i); if (!p || (p.hp <= 0 && side === 'enemy')) return;
   if (p.boss) return;
   const [bx, by] = slot(side, i), s = depthScale(by) * 1.05;
@@ -1403,7 +838,7 @@ function drawUnitBars(side, i) {
   if (side === 'team') txt(`${p.hp}`, x + w + 4, top + 3, 13, '#e8e0f0', 'left');
   else typePill(p.type, x + w + 6, top + 3, 12);
 }
-function drawRing(a) {
+function drawRing(a: Loose) {
   const now = a.t, [cx, cy] = ringCenter(a), m = MOVES[a.move];
   const big = m.target === 'all' ? 1.7 : 1;
   const col = a.side === 'team' ? CYAN : CRIM;
@@ -1427,7 +862,7 @@ function drawRing(a) {
   }
 }
 function drawStrip() {
-  const Bt = state.battle, n = Bt.strip.length, w = 52, x0 = W / 2 - (n * w) / 2;
+  const Bt: Battle = state.battle, n = Bt.strip.length, w = 52, x0 = W / 2 - (n * w) / 2;
   panel(x0 - 92, 8, n * w + 104, 60, 'rgba(242,193,78,0.5)', 0.8);
   txt(`TURNO ${Bt.round}`, x0 - 46, 38, 15, GOLD, 'center', true);
   Bt.strip.forEach((s, k) => {
@@ -1441,7 +876,7 @@ function drawStrip() {
   });
 }
 function drawIntents() {
-  const Bt = state.battle;
+  const Bt: Battle = state.battle;
   Bt.enemies.forEach((e, i) => {
     if (e.hp <= 0 || !e.intent) return;
     const m = MOVES[e.intent.move], [ex, ey] = centerOf('enemy', i);
@@ -1466,7 +901,7 @@ function drawIntents() {
   });
 }
 function drawPlanPanel() {
-  const Bt = state.battle, p = state.team[Bt.cur]; if (!p) return;
+  const Bt: Battle = state.battle, p = state.team[Bt.cur]; if (!p) return;
   const y = 574, avail = availEn();
   panel(10, y, W - 20, 138, GOLD, 0.92);
   const s = clamp(84 / Math.max(FIG_H(p.sp), FIG_W(p.sp) * 0.7), 0.3, 0.9);
@@ -1515,7 +950,7 @@ function drawPlanPanel() {
 }
 // The shared energy: what is free, what the chosen moves have reserved, what the move under the cursor would take.
 function drawPool() {
-  const Bt = state.battle, plan = Bt.phase === 'plan', reserved = plan ? reservedEn() : 0, avail = Math.max(0, Bt.en - reserved);
+  const Bt: Battle = state.battle, plan = Bt.phase === 'plan', reserved = plan ? reservedEn() : 0, avail = Math.max(0, Bt.en - reserved);
   let preview = 0;
   if (plan) { const p = state.team[Bt.cur]; if (p) { const c = MOVES[p.moves[Bt.sel]].en; if (c <= avail) preview = c; } }
   panel(12, 10, 340, 110, CYAN, 0.86);
@@ -1538,13 +973,13 @@ function drawPool() {
 }
 // Brackets around whatever the move under the cursor will hit, heal or protect.
 function drawTargetMarker() {
-  const Bt = state.battle, p = state.team[Bt.cur]; if (!p) return;
+  const Bt: Battle = state.battle, p = state.team[Bt.cur]; if (!p) return;
   const m = MOVES[p.moves[Bt.sel]], opts = targetOptions(p, m);
-  let list = [], col = GOLD, label = 'OBJETIVO';
+  let list: [string, number][] = [], col = GOLD, label = 'OBJETIVO';
   if (m.target === 'one' && opts.length) list = [['enemy', opts[clamp(Bt.tgt, 0, opts.length - 1)]]];
-  else if (m.target === 'all') { list = Bt.enemies.map((e, i) => ['enemy', i]).filter(([, i]) => Bt.enemies[i].hp > 0); label = 'TODOS'; }
+  else if (m.target === 'all') { list = Bt.enemies.map((e, i): [string, number] => ['enemy', i]).filter(([, i]) => Bt.enemies[i].hp > 0); label = 'TODOS'; }
   else if (m.target === 'ally' && opts.length) { list = [['team', opts[clamp(Bt.tgt, 0, opts.length - 1)]]]; col = '#9cff7a'; label = 'CURAR'; }
-  else if (m.target === 'team') { list = state.team.map((q, i) => ['team', i]).filter(([, i]) => state.team[i].hp > 0); col = '#9fd8ff'; label = 'PROTEGER'; }
+  else if (m.target === 'team') { list = state.team.map((q, i): [string, number] => ['team', i]).filter(([, i]) => state.team[i].hp > 0); col = '#9fd8ff'; label = 'PROTEGER'; }
   else { list = [['team', Bt.cur]]; col = '#9fd8ff'; label = 'PROTEGER'; }
   const pulse = 1 + Math.sin(state.t * 6) * 0.06;
   for (const [side, i] of list) {
@@ -1553,7 +988,7 @@ function drawTargetMarker() {
     B(); el(bx, by + 2, FIG_W(u.sp) * s * 0.62, 15 * s); ctx.lineWidth = 5; ctx.strokeStyle = col; ctx.stroke();
     for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
       const x = cx + sx * w, y = cy + sy * h;
-      for (const [lw, c] of [[9, INK], [5, col]]) { B(); ctx.moveTo(x - sx * L, y); ctx.lineTo(x, y); ctx.lineTo(x, y - sy * L); ctx.lineWidth = lw; ctx.strokeStyle = c; ctx.lineCap = 'round'; ctx.stroke(); }
+      for (const [lw, c] of [[9, INK], [5, col]] as [number, string][]) { B(); ctx.moveTo(x - sx * L, y); ctx.lineTo(x, y); ctx.lineTo(x, y - sy * L); ctx.lineWidth = lw; ctx.strokeStyle = c; ctx.lineCap = 'round'; ctx.stroke(); }
     }
     ctx.font = `700 14px ${FONT}`; const tw = ctx.measureText(label).width + 20;
     const lx = side === 'enemy' ? cx - w - 10 - tw : cx + w + 10;
@@ -1562,7 +997,7 @@ function drawTargetMarker() {
 }
 // Above each pet: an arrow on the one choosing, and the move (and its energy) on the ones already chosen.
 function drawPlanTags() {
-  const Bt = state.battle;
+  const Bt: Battle = state.battle;
   state.team.forEach((p, i) => {
     if (p.hp <= 0) return;
     const [x, y] = slot('team', i), top = y - FIG_H(p.sp) * depthScale(y) * 1.05 - 64;
@@ -1574,11 +1009,11 @@ function drawPlanTags() {
   });
 }
 function drawBattle() {
-  const Bt = state.battle;
+  const Bt: Battle = state.battle;
   ctx.save();
   if (state.shake > 0) ctx.translate((rng() - 0.5) * 14 * state.shake / 0.2, (rng() - 0.5) * 10 * state.shake / 0.2);
   drawArena(THEMES[ROOMS[state.room].theme]);
-  const order = [];
+  const order: [string, number, number][] = [];
   state.team.forEach((p, i) => order.push(['team', i, slot('team', i)[1]]));
   Bt.enemies.forEach((p, i) => order.push(['enemy', i, slot('enemy', i)[1]]));
   order.sort((a, b) => a[2] - b[2]);
@@ -1625,7 +1060,7 @@ function drawBattle() {
 
 // ---- Drawing: song, tally, learning, evolution --------------------------------------------
 function drawSong() {
-  const S = state.song, Bt = state.battle;
+  const S: Song = state.song, Bt = state.battle;
   drawArena(THEMES[ROOMS[state.room].theme]);
   ctx.fillStyle = 'rgba(6,8,22,0.62)'; ctx.fillRect(0, 0, W, H);
   const e = S.phase === 'offer' ? Bt.enemies[S.cands[S.pick]] : S.e;
@@ -1712,7 +1147,7 @@ function drawSong() {
   if (S.phase === 'swap') state.team.forEach((p, i) => { pill(12 + i * 316 + 262, 640, 30, 24, GOLD, INK); txt(String(i + 1), 12 + i * 316 + 277, 652, 15, '#1b1426', 'center', true, false); });
 }
 function drawTally() {
-  const TL = state.tally;
+  const TL: Tally = state.tally;
   drawArena(THEMES[ROOMS[state.room].theme]);
   ctx.fillStyle = 'rgba(6,8,22,0.6)'; ctx.fillRect(0, 0, W, H);
   panel(190, 60, 900, 600, GOLD, 0.94);
@@ -1730,7 +1165,7 @@ function drawTally() {
     const lvShown = u >= 1 ? r.to : r.from;
     txt(`Nv ${lvShown}`, 520, y + 22, 18, GOLD, 'left', true);
     txt(`+${Math.round(r.gain * u)} EXP`, 600, y + 22, 16, '#bfefff', 'left');
-    const fill = r.to > r.from ? (u < 1 ? r.x0 + (1 - r.x0) * u : r.x1) : lerp(r.x0, r.x1, u);
+    const fill = r.to > r.from ? (u < 1 ? r.x0 + (1 - r.x0) * u : r.x1!) : lerp(r.x0, r.x1!, u);
     ctx.fillStyle = '#1a1424'; ctx.fillRect(330, y + 40, 300, 10); ctx.fillStyle = '#7fc8ff'; ctx.fillRect(330, y + 40, 300 * clamp(fill, 0, 1), 10);
     if (u >= 1) r.lines.slice(0, 3).forEach((ln, j) => txt(ln, 660, y + 22 + j * 24, 15, ln.startsWith('¡') ? '#9cff7a' : '#ffd36b', 'left', true));
     if (p.hp <= 0) txt('Debilitada: la mitad de EXP', 330, y + 70, 14, '#ffb0c0', 'left');
@@ -1738,7 +1173,7 @@ function drawTally() {
   if (TL.t > 1.6) txt('Enter para continuar', 640, 636, 18, '#fff6dc', 'center', true);
 }
 function drawLearn() {
-  const L = state.learn, p = state.team.find(q => q.uid === L.uid), nm = MOVES[L.move];
+  const L = state.learn, p = state.team.find(q => q.uid === L.uid)!, nm = MOVES[L.move];
   drawArena(THEMES[ROOMS[state.room].theme]);
   ctx.fillStyle = 'rgba(6,8,22,0.66)'; ctx.fillRect(0, 0, W, H);
   panel(190, 90, 900, 520, GOLD, 0.95);
@@ -1757,7 +1192,7 @@ function drawLearn() {
   txt('1-4: olvidar ese ataque   ·   Retroceso: no aprender', 640, 580, 16, '#9fd8e8', 'center');
 }
 function drawEvolve() {
-  const E = state.evo, p = state.team.find(q => q.uid === E.uid);
+  const E = state.evo, p = state.team.find(q => q.uid === E.uid)!;
   ctx.fillStyle = '#07060f'; ctx.fillRect(0, 0, W, H);
   const g = ctx.createRadialGradient(640, 380, 10, 640, 380, 420); g.addColorStop(0, 'rgba(255,230,160,0.35)'); g.addColorStop(1, 'rgba(255,230,160,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   for (let k = 0; k < 14; k++) { const a = k / 14 * TAU + state.t * 0.6; ctx.strokeStyle = 'rgba(255,230,160,0.12)'; ctx.lineWidth = 18; B(); ctx.moveTo(640, 380); ctx.lineTo(640 + Math.cos(a) * 800, 380 + Math.sin(a) * 800); ctx.stroke(); }
@@ -1787,18 +1222,18 @@ function drawStarter() {
   });
   const sp = STARTERS[state.pick], S_ = SPECIES[sp];
   panel(240, 600, 800, 96, GOLD, 0.9);
-  txt(S_.desc, 640, 630, 19, '#fff6dc', 'center', true);
-  txt(`Fuerte contra ${TYPES[TYPES[S_.type].beats].name} · débil contra ${Object.values(TYPES).find(t_ => t_.beats === S_.type).name} · evoluciona a nivel ${tune.evolve_level}`, 640, 664, 16, '#d8d0e8', 'center');
+  txt(S_.desc!, 640, 630, 19, '#fff6dc', 'center', true);
+  txt(`Fuerte contra ${TYPES[TYPES[S_.type].beats!].name} · débil contra ${Object.values(TYPES).find(t_ => t_.beats === S_.type)!.name} · evoluciona a nivel ${tune.evolve_level}`, 640, 664, 16, '#d8d0e8', 'center');
 }
 function drawFx() {
   for (const f of state.fx) {
     const a = clamp(1 - f.t / f.life, 0, 1);
-    if (f.k === 'pop') { ctx.save(); ctx.globalAlpha = a; txt(f.s, f.x, f.y, f.size * (1 + Math.max(0, 0.25 - f.t) * 1.6), f.col, 'center', true); ctx.restore(); }
+    if (f.k === 'pop') { ctx.save(); ctx.globalAlpha = a; txt(f.s!, f.x, f.y, f.size! * (1 + Math.max(0, 0.25 - f.t) * 1.6), f.col, 'center', true); ctx.restore(); }
     else { ctx.save(); ctx.globalAlpha = a; diamond(f.x, f.y, 5 * a + 1, f.col); ctx.restore(); }
   }
 }
-function updFx(dt) {
-  for (const f of state.fx) { f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; if (f.k === 'pop') f.vy += f.g * dt; else { f.vx *= 0.92; f.vy *= 0.92; } }
+function updFx(dt: number) {
+  for (const f of state.fx) { f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; if (f.k === 'pop') f.vy += f.g! * dt; else { f.vx *= 0.92; f.vy *= 0.92; } }
   state.fx = state.fx.filter(f => f.t < f.life);
   if (state.shake > 0) state.shake = Math.max(0, state.shake - dt);
   if (state.toastT > 0) state.toastT -= dt;
@@ -1806,7 +1241,7 @@ function updFx(dt) {
 }
 
 // ---- Scenes ----------------------------------------------------------------------------
-const scenes = {
+const scenes: Record<string, { update(dt: number): void; draw(): void }> = {
   figures: {
     update(dt) { state.t += dt; },
     draw() {
@@ -1904,7 +1339,7 @@ function step() {
   if (pressed('KeyM')) { setMuted(!muted); hit.delete('KeyM'); }
   scenes[scene].update(STEP); hit.clear();
 }
-let last, acc = 0, ALPHA = 1;
+let last = 0, acc = 0, ALPHA = 1;
 function tick() {
   const now = clock.now();
   acc += Math.min(now - last, 0.25); last = now;
@@ -1912,12 +1347,12 @@ function tick() {
   ALPHA = acc / STEP;
   drawFrame();
 }
-function drawFrame() { ctx = mainCtx; scenes[scene].draw(); }
+function drawFrame() { setCtx(mainCtx); scenes[scene].draw(); }
 function frame() { tick(); requestAnimationFrame(frame); }
 function timer() { if (document.visibilityState === 'visible' && clock.now() - last > 0.1) tick(); }
 
 // ---- What a check can read and drive (?manual=1 stops the loop; players never see it) ----
-window.game = {
+install({
   get scene() { return scene; },
   get state() { return state; },
   press(code) { hit.add(code); },
@@ -1927,10 +1362,11 @@ window.game = {
     for (let i = 0; i < n; i++) step();
     if (draw) { ALPHA = alpha; drawFrame(); }
   },
-};
+});
 
 reset();
 scene = params.get('scene') || 'title';
 last = clock.now();
-if (params.get('manual') === '1') drawFrame();
+if (manual) drawFrame();
 else { requestAnimationFrame(frame); setInterval(timer, 50); }
+

@@ -32,7 +32,7 @@ const TITLE = 'Canto Salvaje';
 const CONTROLS = [
   'Flechas o WASD: moverte por la mazmorra',
   'En tu turno: Izquierda/Derecha ataque · Arriba/Abajo objetivo · Enter confirma',
-  'Cada ataque tiene su tecla (W, A, S, D o Espacio): púlsala al cerrarse el anillo',
+  'Cada ataque esconde su propia secuencia de teclas (W, A, S, D o Espacio): descúbrela',
   'Flechas: las notas de la canción sanadora',
   'P: pausa  ·  M: silencio',
 ];
@@ -178,19 +178,23 @@ const MOVES = {
   marejada: { name: 'Marejada', type: 'marea', en: 0, pow: 9, hits: 3, target: 'one', kind: 'hit', ring: 0.75 },
   descanso: { name: 'Descansar', type: 'neutro', en: 0, pow: 0, hits: 0, target: 'self', kind: 'guard' },
 };
-// Each move's key: press it (not just Space) when its ring closes, to hit or to block.
+// The keys a timed press can use. Each hit wants one of them (MOVE_KEYS), never shown to the player.
 const KEYCAPS = [
   { id: 'W', label: 'W', codes: ['KeyW', 'ArrowUp'] }, { id: 'A', label: 'A', codes: ['KeyA', 'ArrowLeft'] },
   { id: 'S', label: 'S', codes: ['KeyS', 'ArrowDown'] }, { id: 'D', label: 'D', codes: ['KeyD', 'ArrowRight'] },
   { id: 'SPC', label: 'ESPACIO', codes: ['Space'] },
 ];
+// Hidden from the player: the key for each hit, in order (it cycles when a move has more hits than keys).
 const MOVE_KEYS = {
-  embestida: 'SPC', chispazo: 'D', cola_ignea: 'W', llamarada: 'S', latigo_hoja: 'A', brote_curativo: 'W', esporas: 'S',
-  burbuja: 'A', maremoto: 'S', rodada: 'S', chorro_doble: 'D', lengua: 'A', picotazo: 'W', pluma_ardiente: 'D',
-  latigazo: 'A', abrazo_zarza: 'W', puno_raiz: 'D', terremoto: 'SPC', marejada: 'A',
+  embestida: ['SPC'], chispazo: ['D', 'A'], cola_ignea: ['W', 'W'], llamarada: ['S'], latigo_hoja: ['A', 'D'],
+  brote_curativo: ['W'], esporas: ['S'], burbuja: ['A', 'A'], maremoto: ['S'], rodada: ['S'], chorro_doble: ['D', 'D'],
+  lengua: ['A', 'W', 'D'], picotazo: ['W', 'W', 'W'], pluma_ardiente: ['D', 'SPC'], latigazo: ['A'], abrazo_zarza: ['W', 'S'],
+  puno_raiz: ['D', 'A'], terremoto: ['SPC', 'S', 'SPC', 'S'], marejada: ['A', 'D', 'A'],
 };
-for (const [id, k] of Object.entries(MOVE_KEYS)) MOVES[id].key = k;
-const keyLabel = id => (KEYCAPS.find(k => k.id === id) || { label: '' }).label;
+for (const [id, k] of Object.entries(MOVE_KEYS)) MOVES[id].keys = k;
+// Free moves give shared energy back when they act.
+const MOVE_GAIN = { embestida: 1, picotazo: 1, lengua: 1, descanso: 2 };
+for (const [id, g] of Object.entries(MOVE_GAIN)) MOVES[id].gain = g;
 // base and grow: [hp, atk, def, spd] at level 1, and per level after it
 const SPECIES = {
   chispin: { name: 'Chispín', type: 'brasa', rarity: 'inicial', base: [34, 11, 8, 12], grow: [6, 2.2, 1.4, 1.2], learn: { 1: ['embestida', 'chispazo'], 3: ['cola_ignea'], 5: ['llamarada'] }, evo: 'fogaral', h: 92, w: 96, desc: 'Rápido y fogoso: golpes dobles de Brasa.' },
@@ -349,13 +353,6 @@ function heart(x, y, s, col) {
   ctx.bezierCurveTo(x + s * 0.6, y - s * 1.2, x + s * 1.4, y - s * 0.2, x, y + s * 0.9); fs(col, 2);
 }
 function diamond(x, y, s, fill) { B(); ctx.moveTo(x, y - s); ctx.lineTo(x + s * 0.75, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s * 0.75, y); ctx.closePath(); fs(fill, 1.5); }
-function keycap(id, x, y, s = 1) { // a drawn key, with its letter on it
-  const wide = id === 'SPC', w = (wide ? 92 : 38) * s, h = 36 * s;
-  B(); ctx.roundRect(x - w / 2, y - h / 2 + 3 * s, w, h, 7 * s); ctx.fillStyle = '#0d0a18'; ctx.fill();
-  B(); ctx.roundRect(x - w / 2, y - h / 2, w, h, 7 * s); ctx.fillStyle = '#f4ead0'; ctx.fill(); ctx.lineWidth = Math.max(1.5, 2.5 * s); ctx.strokeStyle = INK; ctx.stroke();
-  txt(keyLabel(id), x, y + s, Math.max(11, (wide ? 15 : 22) * s), '#1b1426', 'center', true, false);
-  return w;
-}
 function chevron(x, y, s, col) { B(); ctx.moveTo(x - s, y - s * 0.7); ctx.lineTo(x, y + s * 0.5); ctx.lineTo(x + s, y - s * 0.7); ctx.lineTo(x, y - s * 0.1); ctx.closePath(); fs(col, 2); }
 
 // ---- Drawing: the creatures (feet at 0,0, facing +x, ink outline, warm light top-left) ------
@@ -762,8 +759,8 @@ function speedStrip() {
 function newRound() {
   const Bt = state.battle; Bt.round++;
   for (const p of state.team) p.guard = false;
-  if (Bt.round > 1) { // the shared pool: each pet still standing adds en_regen
-    const before = Bt.en; Bt.en = Math.min(tune.en_max, Bt.en + tune.en_regen * alive(state.team).length); Bt.gain = Bt.en - before;
+  if (Bt.round > 1) { // the shared pool: a flat en_regen each new round
+    const before = Bt.en; Bt.en = Math.min(tune.en_max, Bt.en + tune.en_regen); Bt.gain = Bt.en - before;
     if (Bt.gain > 0) pop(`+${Bt.gain} energía`, 250, 70, CYAN, 22, { vx: 0, vy: -40, g: 0, life: 1.4 });
   }
   Bt.teamGuard = false;
@@ -838,6 +835,10 @@ function startExec() {
 function buildAction(q) {
   const m = MOVES[q.move], Bt = state.battle, actor = unit(q.side, q.i);
   if (m.en && q.side === 'team') Bt.en = Math.max(0, Bt.en - m.en); // spent from the shared pool as it acts
+  if (m.gain && q.side === 'team') { // a free move recharges the pool
+    const before = Bt.en; Bt.en = Math.min(tune.en_max, Bt.en + m.gain);
+    if (Bt.en > before) pop(`+${Bt.en - before} energía`, 250, 70, '#9cff7a', 22, { vx: 0, vy: -40, g: 0, life: 1.3 });
+  }
   let target = q.target;
   if (m.target === 'one') {
     const arr = q.side === 'team' ? Bt.enemies : state.team;
@@ -853,7 +854,7 @@ function buildAction(q) {
     let tt = a.approach;
     for (let k = 0; k < m.hits; k++) {
       const start = tt, impact = start + (m.feint ? ringT * 0.5 + 0.38 + ringT * 0.18 : ringT);
-      a.hits.push({ start, impact, ringT, feint: !!m.feint, judged: false, res: '' });
+      a.hits.push({ start, impact, ringT, feint: !!m.feint, judged: false, res: '', key: m.keys ? m.keys[k % m.keys.length] : 'SPC' });
       tt = impact + tune.hit_gap;
     }
     a.end = a.hits[a.hits.length - 1].impact + Math.max(tune.good_window, tune.block_window) + 0.4;
@@ -958,7 +959,7 @@ function updExec(dt) {
       const h = a.hits.find(h => !h.judged && a.t >= h.start - 0.05);
       if (h) {
         const d = a.t - h.impact;
-        if (kc.id !== m.key) judge(a, h, 'wrong');
+        if (kc.id !== h.key) judge(a, h, 'wrong');
         else if (d < -win) judge(a, h, 'early');
         else if (a.side === 'team') judge(a, h, Math.abs(d) <= tune.crit_window ? 'perfect' : 'good');
         else judge(a, h, Math.abs(d) <= tune.parry_window ? 'parry' : 'block');
@@ -1420,13 +1421,6 @@ function drawRing(a) {
     for (let k = 0; k < 4; k++) { const ang = k * Math.PI / 2 + Math.PI / 4; diamond(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 7, col); }
     break;
   }
-  const h0 = a.hits.find(h => !h.judged && now >= h.start - 0.02);
-  if (h0 && m.key) {
-    keycap(m.key, cx, cy, 1);
-    const kl = keyLabel(m.key);
-    if (a.side === 'team' && state.tut.atk < 3) txt(`¡Pulsa ${kl} cuando el anillo se cierre!`, cx, cy + 92 * big, 20, CYAN, 'center', true);
-    if (a.side === 'enemy' && state.tut.def < 3) txt(`¡Pulsa ${kl} para bloquear! Justo a tiempo: PARADA`, cx, cy + 92 * big, 20, '#ffb0c0', 'center', true);
-  }
 }
 function drawStrip() {
   const Bt = state.battle, n = Bt.strip.length, w = 52, x0 = W / 2 - (n * w) / 2;
@@ -1451,9 +1445,8 @@ function drawIntents() {
     const top = e.boss ? 214 : slot('enemy', i)[1] - FIG_H(e.sp) * s - 64;
     const label = m.kind === 'guard' ? `${m.name} (se protege)` : m.target === 'all' ? `${m.name} · a todo tu equipo` : `${m.name} · ${m.hits} golpe${m.hits > 1 ? 's' : ''}`;
     ctx.font = `700 14px ${FONT}`; const w = ctx.measureText(label).width + 22;
-    const kw = m.key ? (m.key === 'SPC' ? 58 : 26) : 0, lx = Math.min(ex, W - 10 - w / 2 - kw - 6);
+    const lx = Math.min(ex, W - 10 - w / 2);
     pill(lx - w / 2, top - 12, w, 24, 'rgba(60,14,32,0.92)', CRIM); txt(label, lx, top, 14, '#ffd8e0', 'center', true, false);
-    if (m.key) keycap(m.key, lx + w / 2 + 6 + kw / 2, top, 0.62);
     if (m.target === 'one' && e.intent.target >= 0 && state.team[e.intent.target] && state.team[e.intent.target].hp > 0) {
       const [tx, ty] = centerOf('team', e.intent.target);
       ctx.save(); ctx.setLineDash([10, 8]); ctx.lineDashOffset = -state.t * 40; ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(224,49,91,0.75)';
@@ -1493,8 +1486,8 @@ function drawPlanPanel() {
     const info = m.kind === 'hit' ? `${m.pow} x ${m.hits}${m.target === 'all' ? ' · a todos' : ''}${m.feint ? ' · finta' : ''}` : m.kind === 'heal' ? 'cura a un aliado' : m.target === 'team' ? 'protege al equipo' : 'se protege';
     txt(info, cx + 120, cy + 35, 13, can ? '#d8d0e8' : '#6a6080', 'left');
     for (let e = 0; e < m.en; e++) diamond(cx + 292 - e * 14, cy + 14, 5.5, can ? CYAN : '#3a3a55');
-    if (!m.en) txt('gratis', cx + 298, cy + 14, 13, '#9cff7a', 'right');
-    if (m.key) keycap(m.key, cx + 298 - (m.key === 'SPC' ? 29 : 12), cy + 35, 0.6);
+    if (m.gain) txt(`+${m.gain} energía`, cx + 298, cy + 14, 13, '#9cff7a', 'right', true);
+    else if (!m.en) txt('gratis', cx + 298, cy + 14, 13, '#9cff7a', 'right');
   }
   txt('Izquierda / Derecha: ataque   ·   Arriba / Abajo: objetivo   ·   1-4 / Enter: confirmar   ·   Retroceso: volver', 606, y + 127, 13, '#9f94b8', 'center');
   const m = MOVES[p.moves[Bt.sel]], opts = targetOptions(p, m);
@@ -1513,7 +1506,8 @@ function drawPlanPanel() {
     txt(m.target === 'all' ? 'Golpea a todos los enemigos' : m.target === 'team' ? 'Mitad de daño al equipo este turno' : 'Mitad de daño este turno', ix, y + 30, 15, '#e8e0f0', 'left', true);
     if (m.kind === 'guard') txt('Actúa antes que nadie', ix, y + 56, 14, '#9fd8ff', 'left');
   }
-  if (m.key) { txt('Al golpear, pulsa', ix, y + 88, 14, '#e8e0f0', 'left', true); keycap(m.key, ix + 150 + (m.key === 'SPC' ? 28 : 0), y + 88, 0.7); }
+  if (m.gain) txt(`Gratis: recarga +${m.gain} energía`, ix, y + 88, 14, '#9cff7a', 'left', true);
+  else if (m.en) txt(`Cuesta ${m.en} de energía`, ix, y + 88, 14, '#bfefff', 'left', true);
 }
 // The shared energy: what is free, what the chosen moves have reserved, what the move under the cursor would take.
 function drawPool() {
@@ -1531,9 +1525,12 @@ function drawPool() {
     else if (k < Bt.en) diamond(x, y, 10, '#c08a20');
     else diamond(x, y, 10, '#1e1e30');
   }
-  if (plan) txt(`Libre ${avail}  ·  Reservada ${reserved}${preview ? `  ·  este ataque ${preview}` : ''}`, 26, 82, 14, '#e8fbff', 'left', true);
+  const recharge = plan ? Bt.plans.reduce((t, pl) => t + (pl ? (MOVES[pl.move].gain || 0) : 0), 0) : 0;
+  const curM = plan && state.team[Bt.cur] ? MOVES[state.team[Bt.cur].moves[Bt.sel]] : null;
+  const tail = preview ? `  ·  este ataque -${preview}` : curM && curM.gain ? `  ·  este ataque +${curM.gain}` : '';
+  if (plan) txt(`Libre ${avail}  ·  Reservada ${reserved}${recharge ? `  ·  Recarga +${recharge}` : ''}${tail}`, 26, 82, 14, '#e8fbff', 'left', true);
   else txt(`Se gasta al atacar · quedan ${Bt.en}`, 26, 82, 14, '#e8fbff', 'left', true);
-  txt(`+${tune.en_regen} por turno por mascota en pie (+${tune.en_regen * alive(state.team).length})  ·  +${tune.en_parry} por parada`, 26, 104, 13, '#bfefff', 'left');
+  txt(`+${tune.en_regen} por turno  ·  los ataques gratis recargan${tune.en_parry ? `  ·  +${tune.en_parry} por parada` : ''}`, 26, 104, 13, '#bfefff', 'left');
 }
 // Brackets around whatever the move under the cursor will hit, heal or protect.
 function drawTargetMarker() {
@@ -1567,7 +1564,7 @@ function drawPlanTags() {
     const [x, y] = slot('team', i), top = y - FIG_H(p.sp) * depthScale(y) * 1.05 - 64;
     if (i === Bt.cur) { chevron(x, top + Math.sin(state.t * 5) * 4, 12, GOLD); return; }
     const pl = Bt.plans[i]; if (!pl) return;
-    const m = MOVES[pl.move], lab = `${m.name}${m.en ? ` · ${m.en} energía` : ''}`;
+    const m = MOVES[pl.move], lab = `${m.name}${m.en ? ` · -${m.en} energía` : m.gain ? ` · +${m.gain} energía` : ''}`;
     ctx.font = `700 13px ${FONT}`; const w = ctx.measureText(lab).width + 20;
     pill(x - w / 2, top - 11, w, 22, 'rgba(60,46,14,0.92)', GOLD); txt(lab, x, top, 13, '#ffe39a', 'center', true, false);
   });

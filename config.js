@@ -40,7 +40,8 @@ window.CONFIG = {
   en_max: { value: 10, min: 1, max: 10, step: 1 },                   // cap of the team's shared energy (the panel draws up to 10)
   en_start: { value: 5, min: 0, max: 10, step: 1 },                  // shared energy on the first turn of each battle
   en_regen: { value: 2, min: 0, max: 5, step: 1 },                   // shared energy each new round, flat (free moves add their own on top)
-  en_parry: { value: 0, min: 0, max: 5, step: 1 },                   // shared energy a perfect parry gives (off: energy comes from turns and free moves)
+  en_parry: { value: 1, min: 0, max: 5, step: 1 },                   // shared energy a perfect parry gives, when its roll succeeds
+  parry_config: { value: 1, min: 0, max: 5, step: 0.25 },            // default worth of a move's parries: each perfect parry rolls parry_config / hits (boss moves set their own in MOVE_PARRY)
 
   // ---- Growth ----
   xp_per_level: { value: 6, min: 1, max: 30, step: 1 },              // XP a defeated creature gives, times its level

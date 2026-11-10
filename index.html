@@ -195,6 +195,12 @@ for (const [id, k] of Object.entries(MOVE_KEYS)) MOVES[id].keys = k;
 // Free moves give shared energy back when they act.
 const MOVE_GAIN = { embestida: 1, picotazo: 1, lengua: 1, descanso: 2 };
 for (const [id, g] of Object.entries(MOVE_GAIN)) MOVES[id].gain = g;
+// parry_config: how much energy a move's perfect parries are worth, spread over its hits.
+// Each perfect parry gives en_parry with chance parry_config / hits (at most 1). Moves not listed use
+// tune.parry_config (1). The boss's moves are worth more, since it fights alone.
+const MOVE_PARRY = { puno_raiz: 2, marejada: 2.5, terremoto: 3 };
+for (const [id, p] of Object.entries(MOVE_PARRY)) MOVES[id].parry = p;
+const parryChance = m => Math.min(1, (m.parry != null ? m.parry : tune.parry_config) / Math.max(1, m.hits));
 // base and grow: [hp, atk, def, spd] at level 1, and per level after it
 const SPECIES = {
   chispin: { name: 'Chispín', type: 'brasa', rarity: 'inicial', base: [34, 11, 8, 12], grow: [6, 2.2, 1.4, 1.2], learn: { 1: ['embestida', 'chispazo'], 3: ['cola_ignea'], 5: ['llamarada'] }, evo: 'fogaral', h: 92, w: 96, desc: 'Rápido y fogoso: golpes dobles de Brasa.' },
@@ -905,8 +911,13 @@ function judge(a, h, res) {
     if (res === 'parry') {
       sfx('parry'); state.stats.parries++; burst(rx, ry, '#ffffff', 16, 260); state.shake = 0.12;
       pop('¡PARADA!', rx, ry - 74, '#ffffff', 32, { vx: 0, vy: -90, g: 0, life: 0.8 });
-      const before = Bt.en; Bt.en = Math.min(tune.en_max, Bt.en + tune.en_parry);
-      if (Bt.en > before) pop(`+${Bt.en - before} energía`, 250, 70, CYAN, 22, { vx: 0, vy: -40, g: 0, life: 1.2 });
+      if (tune.en_parry > 0 && rng() < parryChance(m)) { // this parry is worth energy
+        const before = Bt.en; Bt.en = Math.min(tune.en_max, Bt.en + tune.en_parry);
+        if (Bt.en > before) {
+          pop(`+${Bt.en - before} energía`, rx, ry - 118, CYAN, 28, { vx: 0, vy: -50, g: 0, life: 1.3 });
+          pop(`+${Bt.en - before} energía`, 250, 70, CYAN, 22, { vx: 0, vy: -40, g: 0, life: 1.2 });
+        }
+      }
       if (actor.hp > 0) { // the counter
         const ti = targets[0], q = state.team[ti];
         if (q) { const d = calcDmg(q, actor, MOVES.embestida, tune.counter_power); hurt(actor, 'enemy', a.i, d, '#ffffff'); pop('Contragolpe', centerOf('enemy', a.i)[0], centerOf('enemy', a.i)[1] - 90, '#e8f8ff', 20, { vx: 0, vy: -60, g: 0, life: 0.9 }); }
@@ -1530,7 +1541,7 @@ function drawPool() {
   const tail = preview ? `  ·  este ataque -${preview}` : curM && curM.gain ? `  ·  este ataque +${curM.gain}` : '';
   if (plan) txt(`Libre ${avail}  ·  Reservada ${reserved}${recharge ? `  ·  Recarga +${recharge}` : ''}${tail}`, 26, 82, 14, '#e8fbff', 'left', true);
   else txt(`Se gasta al atacar · quedan ${Bt.en}`, 26, 82, 14, '#e8fbff', 'left', true);
-  txt(`+${tune.en_regen} por turno  ·  los ataques gratis recargan${tune.en_parry ? `  ·  +${tune.en_parry} por parada` : ''}`, 26, 104, 13, '#bfefff', 'left');
+  txt(`+${tune.en_regen} por turno · gratis recargan${tune.en_parry ? ` · paradas +${tune.en_parry} a veces` : ''}`, 26, 104, 13, '#bfefff', 'left');
 }
 // Brackets around whatever the move under the cursor will hit, heal or protect.
 function drawTargetMarker() {

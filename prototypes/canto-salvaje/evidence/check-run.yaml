@@ -1,0 +1,179 @@
+# The one-shot's small check (check-run/1).
+# Written by one-shot-check.sh --record: the results are /prototype's reading of
+# evidence/self-check.tsv; never edited by hand.
+kind: check-run/1
+engine: web
+browser: "HeadlessChrome/157.0.0.0"
+time: "2026-11-10 13:01:56"
+checks:
+  - id: boots
+    result: pass
+    evidence:
+      - "evidence/self-check.tsv"
+  - id: shot
+    result: pass
+    evidence:
+      - "evidence/play.png"
+  - id: outlines
+    result: pass
+    evidence:
+      - "evidence/figures.png"
+  - id: brief-words
+    result: pass
+    evidence:
+      - "evidence/brief-words.tsv"
+  - id: emoji
+    result: pass
+    evidence:
+      - "evidence/self-check.tsv"
+  - id: nearest-game
+    result: pass
+    evidence:
+      - "evidence/nearest-game.txt"
+brief_checklist:
+  - id: L1
+    result: pass
+    evidence: "evidence/battle.png"
+    item: "Look: *(provisional)* Sprites 2.5D detallados sobre escenarios con profundidad 3D."
+  - id: L2
+    result: pass
+    evidence: "evidence/battle.png"
+    item: "References: Pokémon Black and White 2 (sprites 2.5D detallados sobre campos 3D, la sensación del equipo), Clair Obscur: Expedition 33 (golpes y paradas a tiempo dentro de un combate por turnos)."
+  - id: L3
+    result: pass
+    evidence: "evidence/play.png"
+    item: "View: 2.5D · Camera: mazmorra vista desde arriba, ligeramente inclinada; combate fijo de lado (tu equipo a la izquierda, enemigos a la derecha)."
+  - id: F1
+    result: pass
+    evidence: "index.html:201"
+    item: "Mazmorra pequeña: 5-6 salas y el jefe"
+  - id: F2
+    result: pass
+    evidence: "evidence/battle.png"
+    item: "Combate por turnos con pausa para elegir el ataque de cada mascota y franja de orden de turno"
+  - id: F3
+    result: pass
+    evidence: "index.html:925"
+    item: "Golpes a tiempo (crítico) y bloqueo o parada a tiempo (parada perfecta = sin daño + contragolpe)"
+  - id: F4
+    result: pass
+    evidence: "index.html:1000"
+    item: "Canción sanadora: minijuego de ritmo con 4 botones. Su longitud depende de la rareza y del nivel de la criatura respecto al tuyo"
+  - id: F5
+    result: pass
+    evidence: "index.html:1159"
+    item: "Equipo de hasta 4 mascotas, empezando por elegir 1 de 3 iniciales"
+  - id: F6
+    result: pass
+    evidence: "index.html:867"
+    item: "Tres tipos en ciclo (Brasa > Brote > Marea > Brasa), con aviso de golpe fuerte o débil"
+  - id: F7
+    result: pass
+    evidence: "index.html:1090"
+    item: "Niveles por experiencia y ataques nuevos al subir de nivel"
+  - id: F8
+    result: pass
+    evidence: "index.html:1147"
+    item: "Evolución: cada inicial evoluciona una vez a nivel 5 (thin stand-in)"
+  - id: F9
+    result: pass
+    evidence: "evidence/figures.png"
+    item: "4 especies salvajes, cada una atacando distinto, más el jefe con un ataque gordo anunciado"
+  - id: F10
+    result: pass
+    evidence: "index.html:841"
+    item: "Números de daño que saltan, barras con estela, y recuento de victoria con fanfarria"
+  - id: S1
+    result: pass
+    evidence: "evidence/battle.png"
+    item: "combate por turnos con interacciones a tiempo · in the slice"
+  - id: S2
+    result: pass
+    evidence: "index.html:1063"
+    item: "equipo de hasta 4 mascotas · in the slice"
+  - id: S3
+    result: pass
+    evidence: "index.html:1004"
+    item: "canción sanadora para convencer · in the slice"
+  - id: S4
+    result: pass
+    evidence: "index.html:1090"
+    item: "subir de nivel · in the slice"
+  - id: S5
+    result: pass
+    evidence: "index.html:1101"
+    item: "aprender ataques nuevos · in the slice"
+  - id: S6
+    result: pass
+    evidence: "index.html:1147"
+    item: "evolucionar · thin stand-in *(guessed)*"
+  - id: S7
+    result: pass
+    evidence: "index.html:262"
+    item: "una mazmorra pequeña con jefe · in the slice"
+  - id: M1
+    result: pass
+    evidence: "index.html:1159"
+    item: "Eliges una de tres mascotas iniciales (Brasa, Brote o Marea)."
+  - id: M2
+    result: pass
+    evidence: "evidence/play.png"
+    item: "Entras a la primera sala y tocas a una criatura salvaje que deambula."
+  - id: M3
+    result: pass
+    evidence: "evidence/battle.png"
+    item: "En el combate, el tiempo se detiene: eliges un ataque con 1-4 y un anillo se cierra sobre el enemigo."
+  - id: M4
+    result: pass
+    evidence: "index.html:851"
+    item: "\"Espacio cuando el anillo se cierre\" y el golpe crítico salta en grande."
+  - id: M5
+    result: pass
+    evidence: "evidence/battle.png"
+    item: "El enemigo anuncia su ataque y otro anillo te pide bloquear: lo paras."
+  - id: M6
+    result: pass
+    evidence: "index.html:1000"
+    item: "Cae derrotado, la cinta de pentagrama se tiende hacia él y tocas 6 notas cortas."
+  - id: M7
+    result: pass
+    evidence: "index.html:1601"
+    item: "\"¡Se une a tu equipo!\", con su nombre y un jingle."
+  - id: M8
+    result: pass
+    evidence: "index.html:1063"
+    item: "Ahora tienes 2 mascotas."
+  - id: C1
+    result: pass
+    evidence: "index.html:201"
+    item: "Las salas 1 y 2 tienen criaturas sueltas y débiles."
+  - id: C2
+    result: not_run
+    mark: not assessed
+    why: "the group of 3 (all three types) is room 3; whether it lands at minute 3-4 needs a played session"
+    evidence: "index.html:237"
+    item: "La sala 3, hacia el minuto 3-4, trae un grupo de 3 con un tipo que tu inicial no cubre: el primer combate de verdad."
+  - id: C3
+    result: not_run
+    mark: not assessed
+    why: "boss warns TERREMOTO a turn ahead, multi-ring hits, phase 2 at half HP are built; minute 10-12 needs a played session"
+    evidence: "index.html:946"
+    item: "El jefe llega hacia el minuto 10-12: anuncia un golpe enorme un turno antes, golpea en varias fases de timing y tiene una segunda fase a media vida."
+  - id: C4
+    result: pass
+    evidence: "index.html:988"
+    item: "Si pierdes, vuelves a la fuente de la entrada con el equipo curado y sin perder nada."
+  - id: C5
+    result: pass
+    evidence: "index.html:974"
+    item: "Las salas superadas siguen superadas."
+  - id: C6
+    result: pass
+    evidence: "index.html:1004"
+    item: "Más adelante: criaturas más raras con canciones más largas y rápidas."
+measures:
+  - id: step-time
+    value: 1.100
+    unit: ms
+    by: browser
+    detail: "mean 0.012 ms, slowest 1.100 ms, 228 steps"

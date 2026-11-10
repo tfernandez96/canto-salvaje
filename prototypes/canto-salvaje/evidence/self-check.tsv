@@ -1,0 +1,56 @@
+time	2026-11-10 13:01:56
+keep	lines	0	pinned	0
+checklist	L1	unlisted	-	Look: *(provisional)* Sprites 2.5D detallados sobre escenarios con profundidad 3D.	
+checklist	L2	unlisted	-	References: Pokémon Black and White 2 (sprites 2.5D detallados sobre campos 3D, la sensación del equipo), Clair Obscur: Expedition 33 (golpes y paradas a tiempo dentro de un combate por turnos).	
+checklist	L3	unlisted	-	View: 2.5D · Camera: mazmorra vista desde arriba, ligeramente inclinada; combate fijo de lado (tu equipo a la izquierda, enemigos a la derecha).	
+checklist	F1	unlisted	-	Mazmorra pequeña: 5-6 salas y el jefe	
+checklist	F2	unlisted	-	Combate por turnos con pausa para elegir el ataque de cada mascota y franja de orden de turno	
+checklist	F3	unlisted	-	Golpes a tiempo (crítico) y bloqueo o parada a tiempo (parada perfecta = sin daño + contragolpe)	
+checklist	F4	unlisted	-	Canción sanadora: minijuego de ritmo con 4 botones. Su longitud depende de la rareza y del nivel de la criatura respecto al tuyo	
+checklist	F5	unlisted	-	Equipo de hasta 4 mascotas, empezando por elegir 1 de 3 iniciales	
+checklist	F6	unlisted	-	Tres tipos en ciclo (Brasa > Brote > Marea > Brasa), con aviso de golpe fuerte o débil	
+checklist	F7	unlisted	-	Niveles por experiencia y ataques nuevos al subir de nivel	
+checklist	F8	unlisted	-	Evolución: cada inicial evoluciona una vez a nivel 5 (thin stand-in)	
+checklist	F9	unlisted	-	4 especies salvajes, cada una atacando distinto, más el jefe con un ataque gordo anunciado	
+checklist	F10	unlisted	-	Números de daño que saltan, barras con estela, y recuento de victoria con fanfarria	
+checklist	S1	unlisted	-	combate por turnos con interacciones a tiempo · in the slice	
+checklist	S2	unlisted	-	equipo de hasta 4 mascotas · in the slice	
+checklist	S3	unlisted	-	canción sanadora para convencer · in the slice	
+checklist	S4	unlisted	-	subir de nivel · in the slice	
+checklist	S5	unlisted	-	aprender ataques nuevos · in the slice	
+checklist	S6	unlisted	-	evolucionar · thin stand-in *(guessed)*	
+checklist	S7	unlisted	-	una mazmorra pequeña con jefe · in the slice	
+checklist	M1	unlisted	-	Eliges una de tres mascotas iniciales (Brasa, Brote o Marea).	
+checklist	M2	unlisted	-	Entras a la primera sala y tocas a una criatura salvaje que deambula.	
+checklist	M3	unlisted	-	En el combate, el tiempo se detiene: eliges un ataque con 1-4 y un anillo se cierra sobre el enemigo.	
+checklist	M4	unlisted	-	"Espacio cuando el anillo se cierre" y el golpe crítico salta en grande.	
+checklist	M5	unlisted	-	El enemigo anuncia su ataque y otro anillo te pide bloquear: lo paras.	
+checklist	M6	unlisted	-	Cae derrotado, la cinta de pentagrama se tiende hacia él y tocas 6 notas cortas.	
+checklist	M7	unlisted	-	"¡Se une a tu equipo!", con su nombre y un jingle.	
+checklist	M8	unlisted	-	Ahora tienes 2 mascotas.	
+checklist	C1	unlisted	-	Las salas 1 y 2 tienen criaturas sueltas y débiles.	
+checklist	C2	unlisted	-	La sala 3, hacia el minuto 3-4, trae un grupo de 3 con un tipo que tu inicial no cubre: el primer combate de verdad.	
+checklist	C3	unlisted	-	El jefe llega hacia el minuto 10-12: anuncia un golpe enorme un turno antes, golpea en varias fases de timing y tiene una segunda fase a media vida.	
+checklist	C4	unlisted	-	Si pierdes, vuelves a la fuente de la entrada con el equipo curado y sin perder nada.	
+checklist	C5	unlisted	-	Las salas superadas siguen superadas.	
+checklist	C6	unlisted	-	Más adelante: criaturas más raras con canciones más largas y rápidas.	
+browser	HeadlessChrome/157.0.0.0
+scene	play	0	title
+scene	play	1	play
+digits	log	17px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 17px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 15px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	14px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+measure	step-time	play	0.012	1.100	228
+lane	play	stop	3.8	88
+uncaught	play	0
+text	play	canvas	24,22,302,35	22.5	16.42	inside	Sala 1 de 6 · Vestíbulo de la fuente
+text	play	canvas	944,23,1255,38	21.0	16.35	inside	Vence a las criaturas para abrir las zarzas
+text	play	canvas	82,663,136,678	21.0	19.83	inside	Chispín
+text	play	canvas	277,663,306,674	21.0	11.81	inside	Nv 1
+text	play	canvas	206,664,236,673	16.5	7.23	inside	Brasa
+text	play	canvas	271,683,309,693	19.5	15.44	inside	34/34
+text	play	canvas	345,72,933,89	25.5	18.46	inside	Toca a una criatura salvaje para combatir. La fuente cura a 
+screen	play	drawn
+shot	play	prototypes/canto-salvaje/evidence/play.png
+responds	changed	28

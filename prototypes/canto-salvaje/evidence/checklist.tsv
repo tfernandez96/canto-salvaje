@@ -1,0 +1,34 @@
+L1	pass	evidence/battle.png	ink-outlined shaded sprites stand on a perspective arena floor with arches and torches; drawFigure index.html:559
+L2	pass	evidence/battle.png	detailed sprites on a deep floor; timed rings on hits and blocks in the turn battle (index.html:925)
+L3	pass	evidence/play.png	dungeon tilted top-down with wall front faces; battle side-on with team left and enemies right (battle.png)
+F1	pass	index.html:201	6 rooms, the last holds the boss; play.png shows Sala 1 de 6
+F2	pass	evidence/battle.png	TURNO strip at top; plan phase waits for a move per pet (index.html:772)
+F3	pass	index.html:925	Space judged against impact: PERFECTO/Bien/Flojo on attack, PARADA (no damage + counter + energy)/Bloqueo on defense (index.html:874)
+F4	pass	index.html:1000	4 lanes on arrows; notes = base by rarity + per level above team average (songLen)
+F5	pass	index.html:1159	pick of 3 starters; join pushes up to max_team 4, a swap prompt past it (index.html:1063)
+F6	pass	index.html:867	Brasa>Brote>Marea>Brasa in TYPES; ¡Eficaz!/Poco eficaz pops and plan panel shows the multiplier
+F7	pass	index.html:1090	XP tally with level-ups; new moves at their level, a forget prompt when four are known
+F8	pass	index.html:1147	starters evolve once at evolve_level 5 with a silhouette sequence; figures.png shows each form
+F9	pass	evidence/figures.png	Musgorro slow heavy hit, Charquillo double, Ascuervo triple fast, Zarzalma feint ring; boss TERREMOTO warned a turn ahead (index.html:718)
+F10	pass	index.html:841	damage numbers on arcs, HP bar with a pale trailing ghost, Victoria fanfare and EXP count-up (index.html:1623)
+S1	pass	evidence/battle.png	enemy turn shows the closing block ring and its prompt
+S2	pass	index.html:1063	team grows to 4 through the song
+S3	pass	index.html:1004	song built from rarity and level; success joins, failure lets it go
+S4	pass	index.html:1090	levels from XP after each win
+S5	pass	index.html:1101	moves learned at listed levels
+S6	pass	index.html:1147	one evolution per starter, working at its simplest
+S7	pass	index.html:262	Sala del Guardián with the Gólem Raíz after five rooms
+M1	pass	index.html:1159	starter screen with Chispín (Brasa), Retoñí (Brote), Gotín (Marea)
+M2	pass	evidence/play.png	first room, Musgorro wandering, touch starts the battle (index.html:685)
+M3	pass	evidence/battle.png	plan phase pauses; 1-4 picks; cyan ring closes on the enemy (index.html:818)
+M4	pass	index.html:851	ESPACIO prompt for first hits; PERFECTO pops big with a burst and shake
+M5	pass	evidence/battle.png	enemy intent shown in plan; red ring with the block prompt on its attack
+M6	pass	index.html:1000	ribbon from trainer to creature; a common Lv1 against a Lv1 team gives 6 notes
+M7	pass	index.html:1601	joins with its name and the join jingle (index.html:1055)
+M8	pass	index.html:1063	recruit pushed onto the team
+C1	pass	index.html:201	rooms 1-2: single Lv1-2 creatures and one pair
+C2	not_assessed	index.html:237	the group of 3 (all three types) is room 3; whether it lands at minute 3-4 needs a played session
+C3	not_assessed	index.html:946	boss warns TERREMOTO a turn ahead, multi-ring hits, phase 2 at half HP are built; minute 10-12 needs a played session
+C4	pass	index.html:988	loss heals the team and returns you to the fountain, nothing lost
+C5	pass	index.html:974	beaten groups stay gone; doors stay open
+C6	pass	index.html:1004	rare creatures get longer notes and a faster bpm

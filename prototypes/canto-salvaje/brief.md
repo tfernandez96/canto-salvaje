@@ -12,12 +12,13 @@ Los protagonistas son humanos, que "adiestran" mascotas (evito usar la palabra c
 6. Look: Vamos con la dirección usual.
 7. Dificultad: Por ahora vamos con lo usual, luego ajustamos cualquier cosa.
 8. Trozo o prueba: Arranquemos con un trozo para probar la sesión, luego vamos refinando las mecánicas
+After play: MUY Bueno el juego. Para el combate añadiría: - Marcador claro de a qué objetivo estás atacando. - Invertir controles: Izquierda-derecha cambian los ataques, arriba-abajo los objetivos (ya que estos se muestran a la derecha, de arriba hacia abajo) - Mejoras sobre la energía: Que sea compartida, y haya indicadores claros sobre cuanto suman - A la hora de atacar/esquivar, que cada ataque tenga un boton asociado (wasd o barra), y al usar ese ataque, haya que presionar esa tecla en lugar de solo la barra
 
 **Pitch:** Bajas a una mazmorra con un equipo de hasta 4 mascotas, peleas por turnos con golpes y bloqueos a tiempo, y a cada criatura que derrotas le tocas una canción sanadora para convencerla de unirse a ti.
 
 **Genre:** RPG por turnos de adiestrar mascotas (creature collector + JRPG por turnos)
 
-**Controls:** *(guessed)* Flechas/WASD para moverte por la mazmorra. En combate: 1-4 elige el ataque de cada mascota y Enter confirma. Espacio golpea a tiempo y bloquea o para a tiempo. En la canción: ← ↓ ↑ → siguiendo el ritmo.
+**Controls:** Flechas/WASD para moverte por la mazmorra. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada ataque tiene su tecla (W, A, S, D o Espacio): se pulsa esa tecla cuando su anillo se cierra, tanto al golpear como al bloquear. En la canción: ← ↓ ↑ → siguiendo el ritmo.
 
 **Question:** ¿Se sostiene una sesión de mazmorra donde la pausa táctica del turno y el timing de golpes, bloqueos y canción se alternan sin cansar?
 
@@ -64,6 +65,9 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - [x] Evolución: cada inicial evoluciona una vez a nivel 5 (thin stand-in)
 - [x] 4 especies salvajes, cada una atacando distinto, más el jefe con un ataque gordo anunciado
 - [x] Números de daño que saltan, barras con estela, y recuento de victoria con fanfarria
+- [x] Marcador claro del objetivo: esquinas, anillo y etiqueta (OBJETIVO, TODOS, CURAR, PROTEGER)
+- [x] Energía compartida del equipo, con panel de libre, reservada, coste del ataque elegido y lo que suma cada turno
+- [x] Cada ataque con su tecla (W, A, S, D o Espacio), mostrada en la carta, el anillo y la intención enemiga
 
 ## Your systems
 - combate por turnos con interacciones a tiempo · in the slice

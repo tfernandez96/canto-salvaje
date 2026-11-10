@@ -37,10 +37,10 @@ window.CONFIG = {
   type_weak: { value: 0.67, min: 0.25, max: 1, step: 0.01 },
   guard_mult: { value: 0.5, min: 0, max: 1, step: 0.05 },            // damage x under Escudo de Agua / Endurecer
   heal_share: { value: 0.35, min: 0.1, max: 1, step: 0.05 },         // share of max HP a heal gives on Bien
-  en_max: { value: 5, min: 1, max: 10, step: 1 },                    // energy cap per pet
-  en_start: { value: 2, min: 0, max: 10, step: 1 },                  // energy at the start of each battle
-  en_regen: { value: 1, min: 0, max: 5, step: 1 },                   // energy each new round
-  en_parry: { value: 1, min: 0, max: 5, step: 1 },                   // energy a perfect parry gives
+  en_max: { value: 10, min: 1, max: 10, step: 1 },                   // cap of the team's shared energy (the panel draws up to 10)
+  en_start: { value: 3, min: 0, max: 10, step: 1 },                  // shared energy at the start of each battle
+  en_regen: { value: 1, min: 0, max: 5, step: 1 },                   // shared energy each new round, per pet still standing
+  en_parry: { value: 1, min: 0, max: 5, step: 1 },                   // shared energy a perfect parry gives
 
   // ---- Growth ----
   xp_per_level: { value: 6, min: 1, max: 30, step: 1 },              // XP a defeated creature gives, times its level

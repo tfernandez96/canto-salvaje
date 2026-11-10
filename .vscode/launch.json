@@ -1,0 +1,24 @@
+{
+  // F5 juega Canto Salvaje: arranca el servidor de desarrollo y abre el navegador con el depurador
+  // conectado (puntos de interrupción en src/*.ts). Al parar la depuración se cierra el navegador;
+  // el servidor sigue en su terminal hasta que lo cierres.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Jugar en Chrome",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "Jugar: servidor de desarrollo"
+    },
+    {
+      "name": "Jugar en Edge",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "Jugar: servidor de desarrollo"
+    }
+  ]
+}

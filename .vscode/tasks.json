@@ -1,0 +1,54 @@
+{
+  // Tareas de Canto Salvaje. Terminal > Run Task... (o Ctrl+Shift+P > "Tasks: Run Task").
+  // Las de test pasan la ruta a "E:" con mayúscula: con "e:" en minúscula Vitest se carga dos veces y falla.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Jugar: servidor de desarrollo",
+      "detail": "npm run dev en http://localhost:5173, con el panel de ajustes en la tecla `",
+      "type": "shell",
+      "command": "npm run dev -- --strictPort",
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": { "activeBegins": true, "beginsPattern": "VITE", "endsPattern": "Local" }
+      },
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "Tests: todos",
+      "detail": "npm test (Vitest y Playwright)",
+      "type": "shell",
+      "command": "$p = (Get-Location).Path; Set-Location ($p.Substring(0,1).ToUpper() + $p.Substring(1)); npm test",
+      "options": { "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] } },
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Tests: solo unitarios",
+      "detail": "npm run test:unit (Vitest)",
+      "type": "shell",
+      "command": "$p = (Get-Location).Path; Set-Location ($p.Substring(0,1).ToUpper() + $p.Substring(1)); npm run test:unit",
+      "options": { "shell": { "executable": "powershell.exe", "args": ["-NoProfile", "-Command"] } },
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Prueba de arranque (smoke)",
+      "detail": "npm run smoke",
+      "type": "shell",
+      "command": "npm run smoke",
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Build para publicar",
+      "detail": "npm run build: la carpeta dist/",
+      "type": "shell",
+      "command": "npm run build",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": ["$tsc"]
+    }
+  ]
+}

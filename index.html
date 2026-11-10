@@ -32,7 +32,7 @@ const TITLE = 'Canto Salvaje';
 const CONTROLS = [
   'Flechas o WASD: moverte por la mazmorra',
   'En tu turno: Izquierda/Derecha ataque · Arriba/Abajo objetivo · Enter confirma',
-  'Cada ataque esconde su propia secuencia de teclas (W, A, S, D o Espacio): descúbrela',
+  'Al aparecer cada anillo, su tecla (W, A, S, D o Espacio): púlsala cuando se cierre',
   'Flechas: las notas de la canción sanadora',
   'P: pausa  ·  M: silencio',
 ];
@@ -359,6 +359,13 @@ function heart(x, y, s, col) {
   ctx.bezierCurveTo(x + s * 0.6, y - s * 1.2, x + s * 1.4, y - s * 0.2, x, y + s * 0.9); fs(col, 2);
 }
 function diamond(x, y, s, fill) { B(); ctx.moveTo(x, y - s); ctx.lineTo(x + s * 0.75, y); ctx.lineTo(x, y + s); ctx.lineTo(x - s * 0.75, y); ctx.closePath(); fs(fill, 1.5); }
+const keyLabel = id => (KEYCAPS.find(k => k.id === id) || { label: '' }).label;
+function keycap(id, x, y, s = 1) { // a drawn key with its letter, shown only inside a ring
+  const wide = id === 'SPC', w = (wide ? 92 : 38) * s, h = 36 * s;
+  B(); ctx.roundRect(x - w / 2, y - h / 2 + 3 * s, w, h, 7 * s); ctx.fillStyle = '#0d0a18'; ctx.fill();
+  B(); ctx.roundRect(x - w / 2, y - h / 2, w, h, 7 * s); ctx.fillStyle = '#f4ead0'; ctx.fill(); ctx.lineWidth = Math.max(1.5, 2.5 * s); ctx.strokeStyle = INK; ctx.stroke();
+  txt(keyLabel(id), x, y + s, Math.max(11, (wide ? 15 : 22) * s), '#1b1426', 'center', true, false);
+}
 function chevron(x, y, s, col) { B(); ctx.moveTo(x - s, y - s * 0.7); ctx.lineTo(x, y + s * 0.5); ctx.lineTo(x + s, y - s * 0.7); ctx.lineTo(x, y - s * 0.1); ctx.closePath(); fs(col, 2); }
 
 // ---- Drawing: the creatures (feet at 0,0, facing +x, ink outline, warm light top-left) ------
@@ -1430,6 +1437,7 @@ function drawRing(a) {
     B(); ctx.arc(cx, cy, r, 0, TAU); ctx.lineWidth = 6; ctx.strokeStyle = col; ctx.stroke();
     ctx.restore();
     for (let k = 0; k < 4; k++) { const ang = k * Math.PI / 2 + Math.PI / 4; diamond(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 7, col); }
+    keycap(h.key, cx, cy, 0.75 + 0.25 * ease((now - h.start) / 0.12)); // this hit's key, from the moment its ring appears
     break;
   }
 }

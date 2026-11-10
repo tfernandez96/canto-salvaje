@@ -55,3 +55,67 @@ test('a scripted run goes from the camp through the map into the first dungeon, 
   expect(first.moved).toBeCloseTo(config.walk_speed.value, 6);
   expect(await run()).toEqual(first);
 });
+
+test('can be played with the mouse from the title into the first dungeon, walking by holding the button', async ({ page }) => {
+  // Clicks land on what the last frame drew (src/pointer.ts); ?manual=1 so each step() is one frame.
+  await page.addInitScript(() => { try { localStorage.clear(); } catch { /* no storage */ } });
+  const errors = await open(page, 'manual=1&seed=7');
+  const step = (n = 1) => page.evaluate(k => window.game!.step(k), n);
+  const st = () => page.evaluate(() => window.game!.state as { mode: string; player: { x: number; y: number } });
+  await page.mouse.click(640, 300); await step();     // the title: a tap anywhere starts
+  expect((await st()).mode).toBe('starter');
+  await page.mouse.click(340, 440); await step();     // the first starter
+  expect((await st()).mode).toBe('camp');
+  await page.mouse.click(1060, 162); await step();    // Mapa de mazmorras
+  expect((await st()).mode).toBe('map');
+  await page.mouse.click(330, 400); await step();     // the selected dungeon: a second tap enters
+  expect((await st()).mode).toBe('dungeon');
+  const before = await st();
+  await page.mouse.move(before.player.x + 300, before.player.y - 24);
+  await page.mouse.down(); await step(30); await page.mouse.up();
+  const after = await st();
+  expect(after.player.x - before.player.x).toBeGreaterThan(config.walk_speed.value * 0.4);
+  expect(Math.abs(after.player.y - before.player.y)).toBeLessThan(10);
+  expect(errors).toEqual([]);
+});
+
+test('in a battle turn, a tap on an attack card uses it on the enemy tapped before', async ({ page }, info) => {
+  await page.addInitScript(() => { try { localStorage.clear(); } catch { /* no storage */ } });
+  const errors = await open(page, 'manual=1&seed=7');
+  // Into the first dungeon by keys, then walk into the first wild creature until its battle asks for a move.
+  const reached = await page.evaluate(() => {
+    const g = window.game!, st = () => g.state as { mode: string; battle: { phase: string } | null };
+    for (let k = 0; k < 4; k++) { g.press('Enter'); g.step(); }
+    g.hold('ArrowRight', true);
+    for (let i = 0; i < 600 && st().mode !== 'battle'; i++) g.step(1, false);
+    g.hold('ArrowRight', false);
+    for (let i = 0; i < 600 && !(st().battle && st().battle!.phase === 'plan'); i++) g.step(1, false);
+    g.step(1); // draw the turn, so the taps land on it
+    return st().battle ? st().battle!.phase : st().mode;
+  });
+  expect(reached).toBe('plan');
+  await page.mouse.click(888, 480); await page.evaluate(() => window.game!.step());   // the enemy
+  await page.mouse.click(760, 608); await page.evaluate(() => window.game!.step());   // card 2: Chispazo
+  const after = await page.evaluate(() => {
+    const b = (window.game!.state as { battle: { phase: string; plans: ({ move: string; target: number } | null)[] } }).battle;
+    return { phase: b.phase, plan: b.plans[0] };
+  });
+  expect(after.phase).toBe('exec');
+  expect(after.plan).toEqual({ move: 'chispazo', target: 0 });
+
+  // The ring key row: step until Chispazo's first ring is about to close, then tap the key it shows.
+  const key = await page.evaluate(() => {
+    const g = window.game!;
+    type H = { start: number; impact: number; key: string; judged: boolean };
+    const act = () => (g.state as { battle: { act: { side: string; move: string; t: number; hits: H[] } | null } }).battle.act;
+    for (let i = 0; i < 600; i++) { const a = act(); if (a && a.side === 'team' && a.move === 'chispazo' && a.t >= a.hits[0].impact - 0.02) break; g.step(1, false); }
+    g.step(1);
+    return act()!.hits[0].key;
+  });
+  await page.screenshot({ path: info.outputPath('touch-pad.png') }); // kept with the test's results, for a look
+  const padX: Record<string, number> = { A: 330, W: 450, SPC: 640, S: 830, D: 950 };
+  await page.mouse.click(padX[key], 673); await page.evaluate(() => window.game!.step());
+  const res = await page.evaluate(() => (window.game!.state as { battle: { act: { hits: { res: string }[] } } }).battle.act.hits[0].res);
+  expect(['perfect', 'good']).toContain(res);
+  expect(errors).toEqual([]);
+});

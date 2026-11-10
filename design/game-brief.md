@@ -19,12 +19,13 @@ After play: Corrección gigante: La tecla si tiene que mostrarse al momento que 
 After play: Ahora que ya está esta mazmorra inicial de tutorial, quiero empezar  planear un poco mas avanzado. - Pantalla de selección de mazmorras (o mundo abierto?) - Qué se conserva entre una mazmorra y otra - Componentes RNG de cada mazmorra - Objetos equipables, bufos - Diario de criaturas (Pokedex)
 After play: Estructura: Mapa + campamento · Progreso: Mixto · RNG: Salas barajadas, Criaturas al azar, Modificador por entrada, Salas especiales · Siguiente: Proyecto web real
 After play: Continuemos
+After play: Si, hace commit. Ahora, podemos hacerlo touch-able con el mouse, y refinar la experiencia para mobile?
 
 **Pitch:** Bajas a una mazmorra con un equipo de hasta 4 mascotas, peleas por turnos con golpes y bloqueos a tiempo, y a cada criatura que derrotas le tocas una canción sanadora para convencerla de unirse a ti.
 
 **Genre:** RPG por turnos de adiestrar mascotas (creature collector + JRPG por turnos)
 
-**Controls:** Flechas/WASD para moverte por la mazmorra. En el campamento, Arriba/Abajo y Enter; en el mapa, Izquierda/Derecha, Enter para entrar y Retroceso para volver. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada golpe tiene su tecla (W, A, S, D o Espacio), de una secuencia propia de cada ataque: aparece dentro del anillo en cuanto el anillo aparece, nunca al elegir el ataque, y se pulsa cuando el anillo se cierra, al golpear y al bloquear. En la canción: ← ↓ ↑ → siguiendo el ritmo.
+**Controls:** Flechas/WASD para moverte por la mazmorra. En el campamento, Arriba/Abajo y Enter; en el mapa, Izquierda/Derecha, Enter para entrar y Retroceso para volver. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada golpe tiene su tecla (W, A, S, D o Espacio), de una secuencia propia de cada ataque: aparece dentro del anillo en cuanto el anillo aparece, nunca al elegir el ataque, y se pulsa cuando el anillo se cierra, al golpear y al bloquear. En la canción: ← ↓ ↑ → siguiendo el ritmo. Con mouse o pantalla táctil: todo lo que se ve se toca; en la mazmorra se mantiene el dedo para caminar hacia él; en tu turno se toca un enemigo para apuntar y un ataque para usarlo; los anillos y la canción muestran botones grandes abajo.
 
 **Question:** ¿Se sostiene una sesión de mazmorra donde la pausa táctica del turno y el timing de golpes, bloqueos y canción se alternan sin cansar?
 
@@ -75,6 +76,7 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - [x] Energía compartida del equipo: 5 al empezar, +2 por turno, los ataques gratis recargan (+1 o +2) y cada parada perfecta puede dar +1 (probabilidad parry_config / golpes del ataque; el jefe vale más); panel con libre, reservada, recarga y coste del ataque elegido
 - [x] Cada ataque con una secuencia de teclas, una por golpe (W, A, S, D o Espacio): la tecla aparece en el anillo al aparecer el anillo, nunca al elegir el ataque
 - [x] Campamento (fogata, fuente que cura, menú), mapa de mazmorras que se abren al vencer a cada jefe, y guardado en el navegador con Continuar o Nueva partida
+- [x] Se juega con mouse o pantalla táctil (botones grandes para los anillos y la canción, pausa y silencio en pantalla) y en el teléfono: sin zoom ni desplazamiento, pantalla completa en horizontal donde el navegador lo permite, aviso para girar el teléfono
 
 ## Your systems
 - combate por turnos con interacciones a tiempo · in the slice

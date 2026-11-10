@@ -2,16 +2,26 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0a14">
 <title>Canto Salvaje</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #0b0a14; overflow: hidden; }
-  body { font-variant-numeric: tabular-nums; }
-  canvas { display: block; margin: 0 auto; }
+  html, body { margin: 0; height: 100%; background: #0b0a14; overflow: hidden; overscroll-behavior: none; }
+  body { font-variant-numeric: tabular-nums; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  canvas { display: block; margin: 0 auto; touch-action: none; }
+  /* A phone held upright: ask for landscape, the game's shape. */
+  #rotate { display: none; position: fixed; inset: 0; background: #0b0a14; color: #f4ead0; font: 700 20px "Trebuchet MS", "Segoe UI", sans-serif;
+            flex-direction: column; align-items: center; justify-content: center; gap: 28px; text-align: center; padding: 24px; }
+  #rotate .phone { width: 46px; height: 80px; border: 4px solid #f2c14e; border-radius: 10px; animation: turn 2.2s ease-in-out infinite; }
+  @keyframes turn { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+  @media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="rotate"><div class="phone"></div><div>Gira el teléfono para jugar en horizontal</div></div>
 <script type="module" src="./src/main.ts"></script>
 </body>
 </html>

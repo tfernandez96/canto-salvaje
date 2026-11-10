@@ -17,6 +17,7 @@ import {
 import { FIG_W, FIG_H, silhouette, drawFigure } from './creatures';
 import { setMuted, muted, tone, seq, sfx } from './audio';
 import { down, hit, pressed, tap, held, digit } from './input';
+import { pointer, region, clearRegions, press, onTapRedraw } from './pointer';
 
 const STEP = 1 / 60;            // simulation step in seconds; motion is per second, never per frame
 const TITLE = 'Canto Salvaje';
@@ -102,6 +103,10 @@ function updDungeon(dt: number) {
   state.stats.time += dt;
   if (state.inv > 0) state.inv -= dt;
   let mx = (held('right') ? 1 : 0) - (held('left') ? 1 : 0), my = (held('down') ? 1 : 0) - (held('up') ? 1 : 0);
+  if (!mx && !my && pointer.held) { // walk toward a held finger or mouse
+    const dx = pointer.x - p.x, dy = pointer.y - (p.y - 24), d = Math.hypot(dx, dy);
+    if (d > 16) { mx = dx / d; my = dy / d; }
+  }
   if (mx || my) {
     const l = Math.hypot(mx, my), v = tune.walk_speed * dt; mx = mx / l * v; my = my / l * v;
     if (canStand(p.x + mx, p.y)) p.x += mx;
@@ -646,6 +651,79 @@ function updStarter() {
   }
 }
 
+// ---- Mouse and touch -------------------------------------------------------------------
+// A tap presses the key the drawn thing stands for (pointer.ts), so play by keyboard is unchanged.
+/** The whole screen as one button. Registered first, so buttons drawn after it sit on top. */
+function tapAll(code: string) { region(0, 0, W, H, press(code)); }
+/** A drawn button that runs on() when tapped or clicked. */
+function button(x: number, y: number, w: number, h: number, label: string, on: () => void, primary = false, size = 18) {
+  B(); ctx.roundRect(x, y, w, h, 12); ctx.fillStyle = primary ? 'rgba(242,193,78,0.92)' : 'rgba(30,26,52,0.92)'; ctx.fill();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = primary ? INK : GOLD; ctx.stroke();
+  txt(label, x + w / 2, y + h / 2 + 1, size, primary ? '#1b1426' : '#fff6dc', 'center', true, false);
+  region(x, y, w, h, on);
+}
+/** Pause and mute, for a player without a keyboard. */
+function cornerButtons(y: number) {
+  if (!pointer.active) return;
+  for (const [k, x] of [[0, 1172], [1, 1224]]) {
+    B(); ctx.roundRect(x, y, 44, 44, 10); ctx.fillStyle = 'rgba(14,12,28,0.85)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = GOLD; ctx.stroke();
+    if (k === 0) { ctx.fillStyle = '#fff6dc'; ctx.fillRect(x + 14, y + 12, 6, 20); ctx.fillRect(x + 24, y + 12, 6, 20); region(x, y, 44, 44, press('KeyP')); }
+    else {
+      B(); ctx.moveTo(x + 10, y + 18); ctx.lineTo(x + 17, y + 18); ctx.lineTo(x + 25, y + 11); ctx.lineTo(x + 25, y + 33); ctx.lineTo(x + 17, y + 26); ctx.lineTo(x + 10, y + 26); ctx.closePath(); fs('#fff6dc', 0);
+      ctx.lineWidth = 2.5; ctx.strokeStyle = muted ? CRIM : '#fff6dc'; B();
+      if (muted) { ctx.moveTo(x + 29, y + 16); ctx.lineTo(x + 37, y + 28); ctx.moveTo(x + 37, y + 16); ctx.lineTo(x + 29, y + 28); } else { ctx.arc(x + 26, y + 22, 7, -0.8, 0.8); ctx.moveTo(x + 33, y + 12); ctx.arc(x + 26, y + 22, 12, -0.9, 0.9); }
+      ctx.stroke(); region(x, y, 44, 44, press('KeyM'));
+    }
+  }
+}
+/** The ring keys as big buttons, while a move plays out, for a player using a mouse or a finger. */
+function drawTouchPad() {
+  const keys: [string, string, number, number][] = [['KeyA', 'A', 330, 104], ['KeyW', 'W', 450, 104], ['Space', 'ESPACIO', 640, 180], ['KeyS', 'S', 830, 104], ['KeyD', 'D', 950, 104]];
+  for (const [code, label, cx, w] of keys) {
+    const x = cx - w / 2, y = 636, h = 74, on = down.has(code) || hit.has(code);
+    B(); ctx.roundRect(x, y + 5, w, h, 14); ctx.fillStyle = 'rgba(8,6,18,0.8)'; ctx.fill();
+    B(); ctx.roundRect(x, y + (on ? 4 : 0), w, h, 14); ctx.fillStyle = on ? '#fff6dc' : 'rgba(244,234,208,0.9)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+    txt(label, cx, y + h / 2 + 1 + (on ? 4 : 0), label.length > 1 ? 20 : 32, '#1b1426', 'center', true, false);
+    region(x, y, w, h + 6, press(code));
+  }
+}
+/** The four song lanes as big buttons along the bottom. */
+function drawLaneButtons() {
+  for (let l = 0; l < 4; l++) {
+    const x = 12 + l * 316, y = 612, w = 304, h = 100;
+    B(); ctx.roundRect(x, y, w, h, 16); ctx.fillStyle = 'rgba(14,12,28,0.88)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = LANE_COL[l]; ctx.stroke();
+    ctx.save(); ctx.shadowColor = LANE_COL[l]; ctx.shadowBlur = 12; arrowShape(l, x + w / 2, y + h / 2, 30, LANE_COL[l], INK, 3); ctx.restore();
+    region(x, y, w, h, press(LANE_KEYS[l][0]));
+  }
+}
+/** A tapped move card: pick it and use it at the enemy or ally last tapped, if it can reach them. */
+function planPick(k: number) {
+  const Bt: Battle = state.battle, p = state.team[Bt.cur]; if (!p || !p.moves[k]) return;
+  const m = MOVES[p.moves[k]];
+  if (k !== Bt.sel) { const keep = MOVES[p.moves[Bt.sel]].target === m.target; Bt.sel = k; if (!keep) defaultTarget(); }
+  const opts = targetOptions(p, m), want = m.target === 'one' ? Bt.foeTap : m.target === 'ally' ? Bt.allyTap : undefined;
+  if (want != null && opts.includes(want)) Bt.tgt = opts.indexOf(want);
+  hit.add('Enter');
+}
+/** A tapped creature in your turn: the enemy (or ally) the next move aims at. */
+function aimAt(side: string, i: number) {
+  const Bt: Battle = state.battle, p = state.team[Bt.cur]; if (!p) return;
+  if (side === 'enemy') Bt.foeTap = i; else Bt.allyTap = i;
+  const m = MOVES[p.moves[Bt.sel]], opts = targetOptions(p, m);
+  if (((side === 'enemy' && m.target === 'one') || (side === 'team' && m.target === 'ally')) && opts.includes(i)) Bt.tgt = opts.indexOf(i);
+  sfx('select');
+}
+/** Every creature on the field can be tapped to aim at it. */
+function planRegions() {
+  const Bt: Battle = state.battle;
+  const add = (side: string, arr: Pet[]) => arr.forEach((u, i) => {
+    if (u.hp <= 0) return;
+    const [bx, by] = slot(side, i), s = u.boss ? 1 : depthScale(by) * 1.05, w = FIG_W(u.sp) * s * 1.2, h = FIG_H(u.sp) * s + 30;
+    region(bx - w / 2, by - h + 14, w, h, () => aimAt(side, i));
+  });
+  add('enemy', Bt.enemies); add('team', state.team);
+}
+
 // ---- Camp, map and save ------------------------------------------------------------------
 // Brief: design/game-brief.md, Your systems (map with camp, mixed progress) and Build order step 4.
 let titleSave: SaveData | null = null, titleSel = 0, titleConfirm = false;
@@ -727,11 +805,13 @@ function drawCamp() {
   panel(880, 120, 380, 214, GOLD, 0.9);
   CAMP_OPTIONS.forEach((o, k) => {
     const y = 162 + k * 52, sel = k === state.campSel;
+    region(896, y - 22, 348, 44, () => { state.campSel = k; hit.add('Enter'); });
     if (sel) { B(); ctx.roundRect(896, y - 21, 348, 42, 10); ctx.fillStyle = 'rgba(242,193,78,0.22)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = GOLD; ctx.stroke(); chevron(918, y - 2, 8, GOLD); }
     txt(o, 938, y, 20, sel ? '#fff6dc' : '#bfb4d0', 'left', true);
   });
-  txt('Arriba / Abajo y Enter', 1070, 316, 14, '#9f94b8', 'center');
+  txt(pointer.active ? 'Toca una opción' : 'Arriba / Abajo y Enter', 1070, 316, 14, '#9f94b8', 'center');
   drawTeamStrip(652);
+  cornerButtons(10);
 }
 function mapArch(x: number, y: number) {
   B(); ctx.moveTo(x - 46, y); ctx.lineTo(x - 46, y - 50); ctx.arc(x, y - 50, 46, Math.PI, 0); ctx.lineTo(x + 46, y); ctx.closePath(); fs(lg(x - 46, 0, x + 46, 0, ['#a39e86', '#6e6a5c']), 3);
@@ -771,6 +851,7 @@ function drawMap() {
   ctx.restore();
   DUNGEONS.forEach((d, i) => {
     const open = isOpen(d, state.cleared), sel = i === state.mapSel, done = state.cleared.includes(d.id);
+    region(d.x - 95, d.y - 80, 190, 190, () => { if (state.mapSel === i) hit.add('Enter'); else { state.mapSel = i; sfx('select'); } });
     B(); el(d.x, d.y + 30, 78, 22); ctx.fillStyle = sel ? 'rgba(242,193,78,0.55)' : 'rgba(90,60,30,0.22)'; ctx.fill();
     if (sel) { ctx.lineWidth = 4; ctx.strokeStyle = '#b07a1a'; ctx.stroke(); }
     ctx.save(); if (!open) ctx.globalAlpha = 0.45;
@@ -787,7 +868,8 @@ function drawMap() {
   panel(70, 612, 1140, 98, GOLD, 0.92);
   txt(d.name, 96, 638, 22, '#fff6dc', 'left', true);
   txt(!open ? lockedLine(d) : !d.built ? 'Próximamente: este camino todavía se está abriendo.' : d.desc, 96, 666, 16, '#e8e0f0', 'left');
-  txt('Izquierda / Derecha: elegir   ·   Enter: entrar   ·   Retroceso: volver al campamento', 96, 692, 14, '#bfb4d0', 'left');
+  txt(pointer.active ? 'Toca una mazmorra para elegirla y otra vez para entrar' : 'Izquierda / Derecha: elegir   ·   Enter: entrar   ·   Retroceso: volver al campamento', 96, 692, 14, '#bfb4d0', 'left');
+  button(1030, 624, 166, 46, 'Campamento', press('Backspace'));
 }
 
 // ---- Drawing: dungeon --------------------------------------------------------------------
@@ -905,6 +987,7 @@ function drawDungeon() {
   panel(W - 10 - ow, 10, ow, 40, roomCleared(state.room) && state.room < ROOMS.length - 1 ? '#9cff7a' : CRIM, 0.8);
   txt(obj, W - 10 - ow / 2, 30, 16, '#f4ead0', 'center', true);
   drawTeamStrip(652);
+  cornerButtons(58);
 }
 function drawTeamStrip(y: number) {
   ctx.fillStyle = 'rgba(10,9,20,0.92)'; ctx.fillRect(0, y - 4, W, H - y + 4);
@@ -1067,11 +1150,14 @@ function drawPlanPanel() {
   txt(`Nv ${p.lv}`, 146, y + 52, 15, GOLD, 'left', true);
   typePill(p.type, 196, y + 52, 12);
   txt(`PV ${p.hp}/${p.maxhp}`, 146, y + 78, 14, '#e8e0f0', 'left');
-  txt(`Energía libre ${avail}`, 146, y + 102, 14, '#bfefff', 'left', true);
+  let back = Bt.cur - 1; while (back >= 0 && state.team[back].hp <= 0) back--;
+  if (pointer.active && back >= 0) button(146, y + 88, 120, 34, 'Volver', press('Backspace'), false, 15);
+  else txt(`Energía libre ${avail}`, 146, y + 102, 14, '#bfefff', 'left', true);
   for (let k = 0; k < 4; k++) {
     const id = p.moves[k], cx = 290 + (k % 2) * 318, cy = y + 10 + Math.floor(k / 2) * 54;
     B(); ctx.roundRect(cx, cy, 306, 48, 10);
     if (!id) { ctx.fillStyle = 'rgba(40,36,60,0.5)'; ctx.fill(); continue; }
+    region(cx, cy, 306, 48, () => planPick(k));
     const m = MOVES[id], can = m.en <= avail, sel = k === Bt.sel;
     ctx.fillStyle = sel ? 'rgba(242,193,78,0.22)' : 'rgba(40,36,66,0.85)'; ctx.fill();
     ctx.lineWidth = sel ? 3 : 1.5; ctx.strokeStyle = sel ? GOLD : 'rgba(255,255,255,0.2)'; ctx.stroke();
@@ -1084,7 +1170,7 @@ function drawPlanPanel() {
     if (m.gain) txt(`+${m.gain} energía`, cx + 298, cy + 14, 13, '#9cff7a', 'right', true);
     else if (!m.en) txt('gratis', cx + 298, cy + 14, 13, '#9cff7a', 'right');
   }
-  txt('Izquierda / Derecha: ataque   ·   Arriba / Abajo: objetivo   ·   1-4 / Enter: confirmar   ·   Retroceso: volver', 606, y + 127, 13, '#9f94b8', 'center');
+  txt(pointer.active ? 'Toca un enemigo para apuntar   ·   toca un ataque para usarlo' : 'Izquierda / Derecha: ataque   ·   Arriba / Abajo: objetivo   ·   1-4 / Enter: confirmar   ·   Retroceso: volver', 606, y + 127, 13, '#9f94b8', 'center');
   const m = MOVES[p.moves[Bt.sel]], opts = targetOptions(p, m);
   const ix = 942;
   if (m.target === 'one' && opts.length) {
@@ -1092,11 +1178,11 @@ function drawPlanPanel() {
     txt('Objetivo', ix, y + 18, 14, '#bfb4d0', 'left');
     txt(nameOf(e), ix, y + 40, 18, '#ffe0e6', 'left', true);
     txt(tm > 1 ? '¡Eficaz!  x' + tune.type_strong : tm < 1 ? 'Poco eficaz  x' + tune.type_weak : 'Daño normal', ix, y + 64, 15, tm > 1 ? '#ffd36b' : tm < 1 ? '#b0a8c0' : '#e8e0f0', 'left', true);
-    if (opts.length > 1) txt('Arriba / Abajo: cambiar objetivo', ix, y + 112, 13, '#bfb4d0', 'left');
+    if (opts.length > 1) txt(pointer.active ? 'Toca otro enemigo para cambiar' : 'Arriba / Abajo: cambiar objetivo', ix, y + 112, 13, '#bfb4d0', 'left');
   } else if (m.target === 'ally' && opts.length) {
     const q = state.team[opts[clamp(Bt.tgt, 0, opts.length - 1)]];
     txt('Curar a', ix, y + 18, 14, '#bfb4d0', 'left'); txt(`${nameOf(q)}  ${q.hp}/${q.maxhp}`, ix, y + 40, 18, '#d8ffd0', 'left', true);
-    if (opts.length > 1) txt('Arriba / Abajo: cambiar aliado', ix, y + 112, 13, '#bfb4d0', 'left');
+    if (opts.length > 1) txt(pointer.active ? 'Toca otro aliado para cambiar' : 'Arriba / Abajo: cambiar aliado', ix, y + 112, 13, '#bfb4d0', 'left');
   } else {
     txt(m.target === 'all' ? 'Golpea a todos los enemigos' : m.target === 'team' ? 'Mitad de daño al equipo este turno' : 'Mitad de daño este turno', ix, y + 30, 15, '#e8e0f0', 'left', true);
     if (m.kind === 'guard') txt('Actúa antes que nadie', ix, y + 56, 14, '#9fd8ff', 'left');
@@ -1166,6 +1252,7 @@ function drawPlanTags() {
 }
 function drawBattle() {
   const Bt: Battle = state.battle;
+  if (Bt.phase === 'intro' || Bt.phase === 'win' || Bt.phase === 'lose') tapAll('Enter');
   ctx.save();
   if (state.shake > 0) ctx.translate((rng() - 0.5) * 14 * state.shake / 0.2, (rng() - 0.5) * 10 * state.shake / 0.2);
   drawArena(THEMES[ROOMS[state.room].theme]);
@@ -1199,6 +1286,7 @@ function drawBattle() {
     drawTargetMarker();
     drawIntents();
     drawPlanTags();
+    planRegions();
     drawPlanPanel();
     if (!state.tut.plan) { panel(330, 140, 620, 44, CYAN, 0.9); txt('Tu turno: el tiempo se detiene. Elige un ataque para cada mascota.', 640, 162, 17, '#e8fbff', 'center', true); }
   }
@@ -1212,6 +1300,8 @@ function drawBattle() {
   }
   if (Bt.phase === 'win') { ctx.fillStyle = 'rgba(10,8,20,0.35)'; ctx.fillRect(0, 0, W, H); txt('¡Victoria!', W / 2, 300, 72, GOLD, 'center', true); }
   if (Bt.phase === 'lose') { ctx.fillStyle = `rgba(10,8,20,${clamp(Bt.t / 1.5, 0, 0.75)})`; ctx.fillRect(0, 0, W, H); txt('Tu equipo ha caído...', W / 2, 310, 52, '#ffd0d8', 'center', true); txt('Volverás a la fuente de la entrada, sin perder nada.', W / 2, 370, 20, '#e8e0f0', 'center'); }
+  if (Bt.phase === 'exec' && pointer.active) drawTouchPad();
+  cornerButtons(10);
 }
 
 // ---- Drawing: song, tally, learning, evolution --------------------------------------------
@@ -1224,6 +1314,7 @@ function drawSong() {
   if (S.phase === 'offer') {
     S.cands.forEach((ci, k) => {
       const en = Bt.enemies[ci], x = 640 + (k - (S.cands.length - 1) / 2) * 260, sel = k === S.pick;
+      region(x - 120, 300, 240, 250, () => { if (S.pick === k) hit.add('Enter'); else { S.pick = k; sfx('select'); } });
       drawFigure(en.sp, x, 470, sel ? 1.15 : 0.85, -1, { t: state.t + k, side: sel ? 'enemy' : null, alpha: sel ? 1 : 0.5 });
       txt(`${nameOf(en)}  Nv ${en.lv}`, x, 510, 18, sel ? '#fff' : '#a098b8', 'center', true);
       txt(`${SPECIES[en.sp].rarity === 'rara' ? 'Rara' : 'Común'} · ${songLen(en)} notas`, x, 536, 15, SPECIES[en.sp].rarity === 'rara' ? '#ff9fc8' : '#bfefff', 'center');
@@ -1232,10 +1323,13 @@ function drawSong() {
     txt('La criatura está derrotada y asustada.', 640, 124, 22, '#e8fbff', 'center', true);
     txt('¿Le tocas la canción sanadora para convencerla de unirse a tu equipo?', 640, 156, 18, '#d8eef8', 'center');
     txt(S.cands.length > 1 ? 'Izquierda / Derecha: elegir a quién   ·   Enter: tocar   ·   Retroceso: seguir sin tocar' : 'Enter: tocar   ·   Retroceso: seguir sin tocar', 640, 188, 15, '#9fd8e8', 'center');
+    button(420, 224, 210, 48, 'Tocar la canción', press('Enter'), true);
+    button(650, 224, 210, 48, 'Seguir sin tocar', press('Backspace'));
     if (state.team.length >= tune.max_team) txt('Tu equipo está completo: si la convences, podrás cambiarla por otra mascota.', 640, 590, 16, '#ffd36b', 'center', true);
     drawTeamStrip(652);
     return;
   }
+  if (S.phase === 'result') tapAll('Enter');
   const calm = S.phase === 'play' ? S.score / S.notes.length : S.ok ? 1 : S.score / S.notes.length;
   // the ribbon: a luminous staff from the trainer to the creature
   const yTop = laneY(0, SONG_X0) - 30, yBot = laneY(3, SONG_X0) + 30;
@@ -1298,12 +1392,16 @@ function drawSong() {
     txt(`¡${nameOf(e)} quiere unirse, pero tu equipo está completo!`, 640, 214, 22, '#fff6dc', 'center', true);
     txt('1-4: ¿qué mascota se despide y vuelve al bosque?', 640, 252, 18, '#e8e0f0', 'center');
     txt(`Retroceso: dejar ir a ${nameOf(e)} en paz (+${tune.release_xp * e.lv} EXP para el equipo)`, 640, 286, 16, '#9fd8e8', 'center');
+    button(490, 334, 300, 46, `Dejar ir a ${nameOf(e)}`, press('Backspace'));
+    state.team.forEach((p, i) => region(12 + i * 316, 650, 304, 64, press('Digit' + (i + 1))));
   }
-  drawTeamStrip(652);
+  if (S.phase === 'play' && pointer.active) drawLaneButtons(); else drawTeamStrip(652);
+  cornerButtons(10);
   if (S.phase === 'swap') state.team.forEach((p, i) => { pill(12 + i * 316 + 262, 640, 30, 24, GOLD, INK); txt(String(i + 1), 12 + i * 316 + 277, 652, 15, '#1b1426', 'center', true, false); });
 }
 function drawTally() {
   const TL: Tally = state.tally;
+  tapAll('Enter');
   drawArena(THEMES[ROOMS[state.room].theme]);
   ctx.fillStyle = 'rgba(6,8,22,0.6)'; ctx.fillRect(0, 0, W, H);
   panel(190, 60, 900, 600, GOLD, 0.94);
@@ -1326,7 +1424,7 @@ function drawTally() {
     if (u >= 1) r.lines.slice(0, 3).forEach((ln, j) => txt(ln, 660, y + 22 + j * 24, 15, ln.startsWith('¡') ? '#9cff7a' : '#ffd36b', 'left', true));
     if (p.hp <= 0) txt('Debilitada: la mitad de EXP', 330, y + 70, 14, '#ffb0c0', 'left');
   });
-  if (TL.t > 1.6) txt('Enter para continuar', 640, 636, 18, '#fff6dc', 'center', true);
+  if (TL.t > 1.6) txt(pointer.active ? 'Toca para continuar' : 'Enter para continuar', 640, 636, 18, '#fff6dc', 'center', true);
 }
 function drawLearn() {
   const L = state.learn, p = state.team.find(q => q.uid === L.uid)!, nm = MOVES[L.move];
@@ -1340,15 +1438,18 @@ function drawLearn() {
   txt('Ya sabe cuatro ataques. ¿Cuál olvida?', 680, 214, 18, '#d8d0e8', 'center');
   p.moves.forEach((id, k) => {
     const m = MOVES[id], y = 244 + k * 70;
+    region(440, y, 500, 58, press('Digit' + (k + 1)));
     B(); ctx.roundRect(440, y, 500, 58, 10); ctx.fillStyle = 'rgba(40,36,66,0.85)'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.stroke();
     pill(452, y + 14, 30, 30, GOLD, null); txt(String(k + 1), 467, y + 29, 16, '#1b1426', 'center', true, false);
     txt(m.name, 496, y + 20, 18, '#fff', 'left', true); typePill(m.type, 496, y + 42, 11);
     txt(m.kind === 'hit' ? `${m.pow} x ${m.hits}` : m.kind === 'heal' ? 'cura' : 'protege', 700, y + 30, 15, '#d8d0e8', 'left');
   });
-  txt('1-4: olvidar ese ataque   ·   Retroceso: no aprender', 640, 580, 16, '#9fd8e8', 'center');
+  txt(pointer.active ? 'Toca el ataque que olvida' : '1-4: olvidar ese ataque   ·   Retroceso: no aprender', 560, 580, 16, '#9fd8e8', 'center');
+  button(860, 556, 200, 46, 'No aprender', press('Backspace'));
 }
 function drawEvolve() {
   const E = state.evo, p = state.team.find(q => q.uid === E.uid)!;
+  tapAll('Enter');
   ctx.fillStyle = '#07060f'; ctx.fillRect(0, 0, W, H);
   const g = ctx.createRadialGradient(640, 380, 10, 640, 380, 420); g.addColorStop(0, 'rgba(255,230,160,0.35)'); g.addColorStop(1, 'rgba(255,230,160,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   for (let k = 0; k < 14; k++) { const a = k / 14 * TAU + state.t * 0.6; ctx.strokeStyle = 'rgba(255,230,160,0.12)'; ctx.lineWidth = 18; B(); ctx.moveTo(640, 380); ctx.lineTo(640 + Math.cos(a) * 800, 380 + Math.sin(a) * 800); ctx.stroke(); }
@@ -1368,9 +1469,10 @@ function drawStarter() {
   drawArena(THEMES[0]);
   ctx.fillStyle = 'rgba(6,8,22,0.35)'; ctx.fillRect(0, 0, W, H);
   txt('Elige a tu primera mascota', 640, 80, 40, '#fff6dc', 'center', true);
-  txt('Izquierda / Derecha y Enter, o 1-3', 640, 122, 17, '#bfb4d0', 'center');
+  txt(pointer.active ? 'Toca a la que quieras' : 'Izquierda / Derecha y Enter, o 1-3', 640, 122, 17, '#bfb4d0', 'center');
   STARTERS.forEach((sp, k) => {
     const x = 340 + k * 300, sel = k === state.pick, y = 470 - (sel ? Math.abs(Math.sin(state.t * 4)) * 12 : 0);
+    region(x - 140, 290, 280, 300, press('Digit' + (k + 1)));
     B(); el(x, 474, 110, 26); ctx.fillStyle = sel ? 'rgba(242,193,78,0.25)' : 'rgba(255,255,255,0.06)'; ctx.fill(); ctx.lineWidth = sel ? 4 : 2; ctx.strokeStyle = sel ? GOLD : 'rgba(255,255,255,0.2)'; ctx.stroke();
     drawFigure(sp, x, y, sel ? 1.5 : 1.2, 1, { t: state.t + k, alpha: sel ? 1 : 0.7 });
     txt(SPECIES[sp].name, x, 530, 24, sel ? '#fff' : '#b0a8c0', 'center', true);
@@ -1427,6 +1529,7 @@ const scenes: Record<string, { update(dt: number): void; draw(): void }> = {
       }
     },
     draw() {
+      if (!titleSave) tapAll('Enter');
       drawArena(THEMES[0]);
       ctx.fillStyle = 'rgba(6,8,22,0.45)'; ctx.fillRect(0, 0, W, H);
       drawFigure('ascuervo', 1010, 330, 0.9, -1, { t: state.t, alpha: 0.85 });
@@ -1438,18 +1541,19 @@ const scenes: Record<string, { update(dt: number): void; draw(): void }> = {
       for (let k = 0; k < 5; k++) { const x = 260 + k * 110 + Math.sin(state.t + k) * 10, y = 300 - k * 14 + Math.sin(state.t * 2 + k) * 8; ctx.save(); ctx.shadowColor = LANE_COL[k % 4]; ctx.shadowBlur = 12; arrowShape(k % 4, x, y, 12, LANE_COL[k % 4], INK, 2.5); ctx.restore(); }
       ctx.save(); ctx.shadowColor = GOLD; ctx.shadowBlur = 24; txt(TITLE, W / 2, 120, 84, '#ffe39a', 'center', true); ctx.restore();
       txt('Una mazmorra, un equipo de mascotas y una canción que sana', W / 2, 184, 22, '#e8fbff', 'center');
-      panel(250, 448, 780, 196, GOLD, 0.88);
-      CONTROLS.forEach((c, i) => txt(c, W / 2, 478 + i * 30, 17, '#e8e0f0', 'center'));
+      if (!titleConfirm) { panel(250, 448, 780, 196, GOLD, 0.88); CONTROLS.forEach((c, i) => txt(c, W / 2, 478 + i * 30, 17, '#e8e0f0', 'center')); }
       const p = 0.6 + Math.sin(state.t * 4) * 0.4;
-      if (!titleSave) txt('Enter para empezar', W / 2, 680, 26, `rgba(255,246,220,${p})`, 'center', true);
+      if (!titleSave) txt('Enter o toca para empezar', W / 2, 680, 26, `rgba(255,246,220,${p})`, 'center', true);
       else if (titleConfirm) {
-        panel(300, 652, 680, 60, CRIM, 0.95);
-        txt('¿Borrar la partida guardada y empezar de cero?', W / 2, 670, 18, '#ffd8e0', 'center', true);
-        txt('Enter: sí, borrar   ·   Retroceso: no', W / 2, 696, 15, '#e8e0f0', 'center');
+        panel(340, 470, 600, 170, CRIM, 0.95);
+        txt('¿Borrar la partida guardada y empezar de cero?', W / 2, 512, 20, '#ffd8e0', 'center', true);
+        button(380, 560, 250, 54, 'Sí, borrar (Enter)', press('Enter'), true);
+        button(650, 560, 250, 54, 'No (Retroceso)', press('Backspace'));
       } else {
         const opts = [`Continuar · ${titleSave.team.length} mascota${titleSave.team.length > 1 ? 's' : ''}`, 'Nueva partida'];
         opts.forEach((o, k) => {
           const x = W / 2 + (k ? 190 : -190), sel = k === titleSel;
+          region(x - 170, 656, 340, 52, () => { titleSel = k; hit.add('Enter'); });
           if (sel) chevron(x - 120, 676, 9, GOLD);
           txt(o, x, 682, sel ? 26 : 22, sel ? `rgba(255,227,154,${0.75 + 0.25 * p})` : '#a8a0c0', 'center', true);
         });
@@ -1498,7 +1602,7 @@ const scenes: Record<string, { update(dt: number): void; draw(): void }> = {
   },
   pause: {
     update() { if (pressed('KeyP') || pressed('Escape')) scene = 'play'; },
-    draw() { scenes.play.draw(); ctx.fillStyle = 'rgba(6,8,22,0.6)'; ctx.fillRect(0, 0, W, H); txt('Pausa', W / 2, H / 2 - 20, 56, '#fff6dc', 'center', true); txt('P para seguir', W / 2, H / 2 + 36, 22, '#d8d0e8', 'center'); },
+    draw() { scenes.play.draw(); ctx.fillStyle = 'rgba(6,8,22,0.6)'; ctx.fillRect(0, 0, W, H); txt('Pausa', W / 2, H / 2 - 20, 56, '#fff6dc', 'center', true); txt('P o toca para seguir', W / 2, H / 2 + 36, 22, '#d8d0e8', 'center'); tapAll('KeyP'); },
   },
   results: {
     update(dt) {
@@ -1516,7 +1620,8 @@ const scenes: Record<string, { update(dt: number): void; draw(): void }> = {
       txt(`Tiempo ${mm}:${String(ss).padStart(2, '0')}   ·   Combates ${st.battles}   ·   Caídas ${st.falls}`, W / 2, 504, 19, '#fff6dc', 'center', true);
       txt(`Golpes perfectos ${st.perfects}   ·   Paradas ${st.parries}`, W / 2, 540, 19, '#bfefff', 'center', true);
       txt(`Mascotas convencidas con tu canción ${st.tamed}`, W / 2, 576, 19, '#d8ffd0', 'center', true);
-      txt('Enter para volver al campamento', W / 2, 616, 18, '#e8e0f0', 'center');
+      tapAll('Enter');
+      txt('Enter o toca para volver al campamento', W / 2, 616, 18, '#e8e0f0', 'center');
     },
   },
 };
@@ -1534,7 +1639,7 @@ function tick() {
   ALPHA = acc / STEP;
   drawFrame();
 }
-function drawFrame() { setCtx(mainCtx); scenes[scene].draw(); }
+function drawFrame() { setCtx(mainCtx); clearRegions(); scenes[scene].draw(); }
 function frame() { tick(); requestAnimationFrame(frame); }
 function timer() { if (document.visibilityState === 'visible' && clock.now() - last > 0.1) tick(); }
 
@@ -1553,6 +1658,7 @@ install({
 
 reset();
 refreshTitle();
+onTapRedraw(drawFrame);
 scene = params.get('scene') || 'title';
 last = clock.now();
 if (manual) drawFrame();

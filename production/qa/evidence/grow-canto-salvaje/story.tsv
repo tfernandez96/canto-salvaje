@@ -1,5 +1,5 @@
 browser	/c/Program Files/Google/Chrome/Application/chrome.exe
-time	2026-11-10 18:24:09
+time	2026-11-10 18:44:30
 render	cheap
 ua	HeadlessChrome/157.0.0.0
 scene	0	title
@@ -136,9 +136,9 @@ digits	log	bold 17px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
 loop	log	none	no loop() step was marked
 first	log	none	no state.beat
 pressure	none	the game set no number state.margin in play
-steptime	3600	0.002	0.900
-frametime	60	5.1	19.1	60	1	0
-done	3600	play	stop	60.0	1973
+steptime	3600	0.003	1.200
+frametime	60	6.0	23.3	60	1	0
+done	3600	play	stop	60.0	3555
 measured	1280x720
 text	play	canvas	24,22,302,35	22.5	16.45	inside	Sala 1 de 6 · Vestíbulo de la fuente
 text	play	canvas	944,23,1255,38	21.0	16.45	inside	Vence a las criaturas para abrir las zarzas

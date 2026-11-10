@@ -78,6 +78,8 @@ export interface Battle {
   cur: number; sel: number; tgt: number; plans: (Plan | null)[]; queue: QueueEntry[]; act: Action | null;
   strip: StripEntry[]; banner: string; bannerT: number; bannerCol?: string; warnShown: boolean; uids: number[];
   phase2Said: boolean; teamGuard?: boolean; stripIdx: number; doorNews?: boolean;
+  /** The enemy and the ally last tapped, aimed at when a move that targets one is tapped. */
+  foeTap?: number; allyTap?: number;
 }
 
 /** A note of the healing song. */

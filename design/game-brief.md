@@ -15,12 +15,13 @@ Los protagonistas son humanos, que "adiestran" mascotas (evito usar la palabra c
 After play: MUY Bueno el juego. Para el combate añadiría: - Marcador claro de a qué objetivo estás atacando. - Invertir controles: Izquierda-derecha cambian los ataques, arriba-abajo los objetivos (ya que estos se muestran a la derecha, de arriba hacia abajo) - Mejoras sobre la energía: Que sea compartida, y haya indicadores claros sobre cuanto suman - A la hora de atacar/esquivar, que cada ataque tenga un boton asociado (wasd o barra), y al usar ese ataque, haya que presionar esa tecla en lugar de solo la barra
 After play: Ya quedó deployado, está buenisimo. Cambiaría el sistema de teclas. Está buenisimo que cada ataque tenga su "velocidad" o su forma única de cerrar el círculo, me parece excelente eso. Pero es feo que te diga "Apretá W al atacar", esa leyenda la sacaría al 100%, que quede oculto. Y que cada ataque tenga un array interno de botones. Pueden ser siempre el mismo, o pueden variar, dependiendo los ataques. Está completamente roto el sistema de energía: Se están ganando unos 7 de energía por turno. Yo arrancaría con 5 energía el primer turno, y de ahí en mas se ganan 2 de energía por turno. Los ataques que no gastan energía, pasarían a recargar energía adicional. (1, 2 o mas, dependiendo el ataque), forzandote a ser consciente del manejo de la misma.
 After play: No sabia que los parrys te daban, eso está buenisimo, quiero quedar esa mecánica. Cuando los parrys perfectos den energía, pone un +1 energía. Y Bajemos la frecuencia, digamos que cada ataque tiene su propio parry_config. Por default es 1 (si es multihit, cada hit va a tener 1/total_hits probabilidad. Pero es importante que los bosses tengan un parry_config mas alto, ya que suele ser 1 solo enemigo.
+After play: Corrección gigante: La tecla si tiene que mostrarse al momento que aparece el círculo. No debe mostrarse al momento de elegir el ataque
 
 **Pitch:** Bajas a una mazmorra con un equipo de hasta 4 mascotas, peleas por turnos con golpes y bloqueos a tiempo, y a cada criatura que derrotas le tocas una canción sanadora para convencerla de unirse a ti.
 
 **Genre:** RPG por turnos de adiestrar mascotas (creature collector + JRPG por turnos)
 
-**Controls:** Flechas/WASD para moverte por la mazmorra. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada ataque esconde su propia secuencia de teclas, una por golpe (W, A, S, D o Espacio), que nunca se muestra: se descubre jugando, al golpear y al bloquear. En la canción: ← ↓ ↑ → siguiendo el ritmo.
+**Controls:** Flechas/WASD para moverte por la mazmorra. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada golpe tiene su tecla (W, A, S, D o Espacio), de una secuencia propia de cada ataque: aparece dentro del anillo en cuanto el anillo aparece, nunca al elegir el ataque, y se pulsa cuando el anillo se cierra, al golpear y al bloquear. En la canción: ← ↓ ↑ → siguiendo el ritmo.
 
 **Question:** ¿Se sostiene una sesión de mazmorra donde la pausa táctica del turno y el timing de golpes, bloqueos y canción se alternan sin cansar?
 
@@ -69,7 +70,7 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - [x] Números de daño que saltan, barras con estela, y recuento de victoria con fanfarria
 - [x] Marcador claro del objetivo: esquinas, anillo y etiqueta (OBJETIVO, TODOS, CURAR, PROTEGER)
 - [x] Energía compartida del equipo: 5 al empezar, +2 por turno, los ataques gratis recargan (+1 o +2) y cada parada perfecta puede dar +1 (probabilidad parry_config / golpes del ataque; el jefe vale más); panel con libre, reservada, recarga y coste del ataque elegido
-- [x] Cada ataque con una secuencia oculta de teclas, una por golpe (W, A, S, D o Espacio), sin leyenda en pantalla
+- [x] Cada ataque con una secuencia de teclas, una por golpe (W, A, S, D o Espacio): la tecla aparece en el anillo al aparecer el anillo, nunca al elegir el ataque
 
 ## Your systems
 - combate por turnos con interacciones a tiempo · in the slice

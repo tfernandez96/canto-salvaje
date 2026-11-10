@@ -1,1 +1,2 @@
 iteration 1	objetivo marcado; controles invertidos (Izq/Der ataque, Arriba/Abajo objetivo); energía compartida con panel; una tecla por ataque (W A S D o Espacio) al golpear y bloquear	errors: none	evidence/iteration-1-play.png evidence/iteration-1-ring.png evidence/iteration-1-small.png
+iteration 2	secuencia oculta de teclas por golpe, sin leyenda; energía 5 al empezar, +2 por turno, ataques gratis recargan, parada sin energía	errors: none	evidence/iteration-2-play.png evidence/iteration-2-ring.png

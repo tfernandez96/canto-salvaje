@@ -1,0 +1,162 @@
+browser	/c/Program Files/Google/Chrome/Application/chrome.exe
+time	2026-11-10 17:45:38
+render	cheap
+ua	HeadlessChrome/157.0.0.0
+scene	0	title
+state	0	title	{"t":0,"score":0,"gained":"","mode":"starter","pick":0,"team":[],"room":0,"rooms":[{"wilds":[{"x":672,"y":321.6,"hx":672,"hy":321.6,"group":[["musgorro",1]],"alive":true,"boss":false,"ph":0}]},{"wilds
+scene	1	play
+state	1	play	{"t":0,"score":0,"gained":"","mode":"starter","pick":0,"team":[],"room":0,"rooms":[{"wilds":[{"x":672,"y":321.6,"hx":672,"hy":321.6,"group":[["musgorro",1]],"alive":true,"boss":false,"ph":0}]},{"wilds
+playinput	28	Enter
+frame	3481	65f8ff10
+frame	3482	d0e8e2ae
+frame	3483	bd5887a5
+frame	3484	f9846639
+frame	3485	e6038c01
+frame	3486	2c844949
+frame	3487	598362e5
+frame	3488	c271f2bc
+frame	3489	489e7bb
+frame	3490	17ee9fab
+frame	3491	62e9fc76
+frame	3492	13c6ee0a
+frame	3493	8d86895c
+frame	3494	e0f3a391
+frame	3495	8f5b0fcc
+frame	3496	bab1eade
+frame	3497	4ff1990b
+frame	3498	a21c695b
+frame	3499	3c04e678
+frame	3500	a29b3808
+frame	3501	fd9648d9
+frame	3502	33dd5a07
+frame	3503	a6889084
+frame	3504	6fc20bd7
+frame	3505	547d50db
+frame	3506	787c1b9f
+frame	3507	84c3a6b4
+frame	3508	aabb9458
+frame	3509	9825f2a5
+frame	3510	beae9c98
+frame	3511	79bc228
+frame	3512	62833c12
+frame	3513	50c19a91
+frame	3514	40108991
+frame	3515	87420097
+frame	3516	f65d9e8d
+frame	3517	528f097
+frame	3518	52bd9dae
+frame	3519	27ca2944
+frame	3520	f0999210
+frame	3521	e1923d91
+frame	3522	2f68f3dd
+frame	3523	4c6f2780
+frame	3524	ba360339
+frame	3525	6d15fb9e
+frame	3526	18923c4f
+frame	3527	7bc9a7eb
+frame	3528	b0598086
+frame	3529	26f08577
+frame	3530	4185f44e
+frame	3531	1c3bab70
+frame	3532	e7dd6d1d
+frame	3533	35f0171
+frame	3534	5a25eb6b
+frame	3535	7e734149
+frame	3536	e771bb1a
+frame	3537	553af5ce
+frame	3538	853bd1d0
+frame	3539	32e349b
+frame	3540	8f31b763
+frame	3541	26081b4a
+frame	3542	b4b09dc5
+frame	3543	57b08c75
+frame	3544	3f9a04b1
+frame	3545	32bbadc1
+frame	3546	9de2364c
+frame	3547	885ee398
+frame	3548	d796a837
+frame	3549	aff5118b
+frame	3550	14ade7f5
+frame	3551	c9ae07a3
+frame	3552	9e42172c
+frame	3553	51feca12
+frame	3554	1cf4a15f
+frame	3555	d77837a
+frame	3556	60a69781
+frame	3557	74143936
+frame	3558	caa2a0b6
+frame	3559	57f50124
+frame	3560	88e6018b
+frame	3561	9e77cb2f
+frame	3562	550c2f93
+frame	3563	5ab502b9
+frame	3564	e7b3ea30
+frame	3565	2b37da3e
+frame	3566	c7822865
+frame	3567	579c74
+frame	3568	581c1e13
+frame	3569	b190ec6f
+frame	3570	70ab4c0e
+frame	3571	2b5645ad
+frame	3572	7f3a7523
+frame	3573	655e7cb4
+frame	3574	2ffa1b8b
+frame	3575	acdc8d3d
+frame	3576	d4eed39c
+frame	3577	37e94bc4
+frame	3578	3306fc9a
+frame	3579	9e563ad2
+frame	3580	54c25245
+frame	3581	ccde3665
+frame	3582	5035b605
+frame	3583	e1b13cc5
+frame	3584	7c4be34c
+frame	3585	b32d0f25
+frame	3586	d20d2037
+frame	3587	5512d2b4
+frame	3588	6dcc0ba0
+frame	3589	d554995b
+frame	3590	7ecdbba1
+frame	3591	afe53d9
+frame	3592	e9cc5fad
+frame	3593	f5547a94
+frame	3594	423efd35
+frame	3595	6e0aa0e
+frame	3596	4eca17c2
+frame	3597	a48fd20
+frame	3598	482920b4
+frame	3599	35a4a88
+frame	3600	c3e08be9
+state	3600	play	{"t":59.98,"score":0,"gained":"","mode":"tally","pick":0,"team":[{"uid":1,"sp":"chispin","lv":1,"xp":6,"type":"brasa","moves":["embestida","chispazo"],"hp":19,"maxhp":34,"atk":11,"def":8,"spd":12,"en"
+digits	log	bold 17px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 15px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	14px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 14px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	13px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 16px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 13px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 30px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 38.8px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 22px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 32.4px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 18px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	15px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 36px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	16px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	18px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+loop	log	none	no loop() step was marked
+first	log	none	no state.beat
+pressure	none	the game set no number state.margin in play
+steptime	3600	0.003	1.000
+frametime	60	6.6	22.7	300	1	0
+done	3600	play	stop	60.0	1948
+measured	1280x720
+text	play	canvas	557,85,724,123	55.5	11.81	inside	¡Victoria!
+text	play	canvas	493,137,788,155	25.5	16.06	inside	+6 EXP para cada mascota que luchó
+text	play	canvas	330,203,397,222	27.0	19.65	inside	Chispín
+text	play	canvas	521,204,555,217	25.5	11.71	inside	Nv 1
+text	play	canvas	600,206,648,217	21.0	15.91	inside	+6 EXP
+text	play	canvas	554,628,728,645	25.5	18.38	inside	Enter para continuar
+screen	3600	play	4d8afcfe	drawn
+uncaught	0
+shot	/e/Proyectos/new-game/production/qa/evidence/grow-canto-salvaje/copy.png	143595

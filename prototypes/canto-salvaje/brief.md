@@ -16,6 +16,8 @@ After play: MUY Bueno el juego. Para el combate añadiría: - Marcador claro de 
 After play: Ya quedó deployado, está buenisimo. Cambiaría el sistema de teclas. Está buenisimo que cada ataque tenga su "velocidad" o su forma única de cerrar el círculo, me parece excelente eso. Pero es feo que te diga "Apretá W al atacar", esa leyenda la sacaría al 100%, que quede oculto. Y que cada ataque tenga un array interno de botones. Pueden ser siempre el mismo, o pueden variar, dependiendo los ataques. Está completamente roto el sistema de energía: Se están ganando unos 7 de energía por turno. Yo arrancaría con 5 energía el primer turno, y de ahí en mas se ganan 2 de energía por turno. Los ataques que no gastan energía, pasarían a recargar energía adicional. (1, 2 o mas, dependiendo el ataque), forzandote a ser consciente del manejo de la misma.
 After play: No sabia que los parrys te daban, eso está buenisimo, quiero quedar esa mecánica. Cuando los parrys perfectos den energía, pone un +1 energía. Y Bajemos la frecuencia, digamos que cada ataque tiene su propio parry_config. Por default es 1 (si es multihit, cada hit va a tener 1/total_hits probabilidad. Pero es importante que los bosses tengan un parry_config mas alto, ya que suele ser 1 solo enemigo.
 After play: Corrección gigante: La tecla si tiene que mostrarse al momento que aparece el círculo. No debe mostrarse al momento de elegir el ataque
+After play: Ahora que ya está esta mazmorra inicial de tutorial, quiero empezar  planear un poco mas avanzado. - Pantalla de selección de mazmorras (o mundo abierto?) - Qué se conserva entre una mazmorra y otra - Componentes RNG de cada mazmorra - Objetos equipables, bufos - Diario de criaturas (Pokedex)
+After play: Estructura: Mapa + campamento · Progreso: Mixto · RNG: Salas barajadas, Criaturas al azar, Modificador por entrada, Salas especiales · Siguiente: Proyecto web real
 
 **Pitch:** Bajas a una mazmorra con un equipo de hasta 4 mascotas, peleas por turnos con golpes y bloqueos a tiempo, y a cada criatura que derrotas le tocas una canción sanadora para convencerla de unirse a ti.
 
@@ -80,7 +82,15 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - aprender ataques nuevos · in the slice
 - evolucionar · thin stand-in *(guessed)*
 - una mazmorra pequeña con jefe · in the slice
-- varias mazmorras · later *(guessed)*
+- mapa de mazmorras con campamento (fuente, equipo, diario, equipables); cada jefe desbloquea la siguiente · later
+- progreso mixto: mascotas, diario y equipables se conservan; las bendiciones solo duran esa entrada · later
+- salas barajadas en cada entrada (hechas a mano, el jefe siempre al final) · later
+- criaturas al azar: tabla por mazmorra con especies, niveles y probabilidad de raras · later
+- modificador por entrada (Niebla: anillos más rápidos; Luna llena: más raras) · later
+- salas especiales al azar: cofres, altares de bendición, segunda fuente · later
+- objetos equipables: un amuleto por mascota, permanente · later *(guessed)*
+- bufos: bendiciones de altar que duran esa entrada · later *(guessed)*
+- diario de criaturas: silueta si no la viste, ficha si la convenciste, con el ritmo de sus anillos · later *(guessed)*
 
 ## Keep
 - que cada ataque tenga su "velocidad" o su forma única de cerrar el círculo *(you said)* · pins: ring_attack 0.7, ring_defend 0.75
@@ -90,22 +100,30 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - La palabra "capturar", y nada de Pokémon: sin bolas de captura, sin sus nombres, criaturas, arte ni interfaz.
 
 ## Out of scope
-- Varias mazmorras: grow it
 - Árboles de evolución con ramas: grow it
 - Una historia en escenas y diálogos: grow it
 - Pueblos, tiendas y misiones secundarias: grow it
 - Cría: add it as a feature
 - Cuidar a las mascotas entre combates: add it as a feature
 - Equipo que enseña habilidades: add it as a feature
-- Objetos: change it after play
 - Variantes raras: change it after play
 - Ataques especiales que se cargan: change it after play
 - Intercambios y combates entre jugadores: needs a server
+- Mapa de mazmorras con campamento: add it as a feature
+- Progreso entre mazmorras y guardado: add it as a feature
+- Salas barajadas, criaturas al azar, modificador por entrada y salas especiales: add it as a feature
+- Objetos equipables y bendiciones: add it as a feature
+- Diario de criaturas: add it as a feature
+- Consumibles: change it after play
 
 ## Build order
 1. El trozo: elegir inicial, recorrer la mazmorra pequeña, combates por turnos con golpes y bloqueos a tiempo, sumar mascotas con la canción, subir de nivel y aprender ataques, evolucionar la inicial, y vencer al jefe. Si caes, vuelves a la fuente.
 2. Ajustar ventanas de timing, longitud de canciones y curva de dificultad tras jugarlo.
-3. Una segunda mazmorra con criaturas más raras.
+3. Convertirlo en proyecto web real (TypeScript, datos en archivos, tests, build).
+4. Campamento, mapa de mazmorras y guardado: lo que se conserva entre mazmorras.
+5. Diario de criaturas.
+6. Segunda mazmorra con azar: salas barajadas, tabla de criaturas, modificador por entrada y salas especiales.
+7. Objetos equipables y bendiciones de altar.
 
 ---
 **Kill condition:** *(guessed)* Si tras dos rondas de ajuste el timing en cada golpe cansa en vez de enganchar.

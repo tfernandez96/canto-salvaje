@@ -1,0 +1,151 @@
+browser	/c/Program Files/Google/Chrome/Application/chrome.exe
+time	2026-11-10 18:24:09
+render	cheap
+ua	HeadlessChrome/157.0.0.0
+scene	0	title
+state	0	title	{"t":0,"score":0,"gained":"","mode":"starter","pick":0,"team":[],"room":0,"rooms":[{"wilds":[{"x":672,"y":321.6,"hx":672,"hy":321.6,"group":[["musgorro",1]],"alive":true,"boss":false,"ph":0}]},{"wilds
+scene	1	play
+state	1	play	{"t":0,"score":0,"gained":"","mode":"starter","pick":0,"team":[],"room":0,"rooms":[{"wilds":[{"x":672,"y":321.6,"hx":672,"hy":321.6,"group":[["musgorro",1]],"alive":true,"boss":false,"ph":0}]},{"wilds
+playinput	28	Enter
+saved	28	localstorage	canto-salvaje:save
+frame	3481	6aee05d0
+frame	3482	c8eaffa2
+frame	3483	78e66078
+frame	3484	1898585f
+frame	3485	bc286733
+frame	3486	ce54fbe4
+frame	3487	d7cb8d33
+frame	3488	b62f6a6d
+frame	3489	93a73863
+frame	3490	29a1c22a
+frame	3491	df8e40f
+frame	3492	120b11e5
+frame	3493	bef35e2f
+frame	3494	ca1a197f
+frame	3495	2ad4c288
+frame	3496	b6aefd2a
+frame	3497	f1d3fcb8
+frame	3498	c6aa34f4
+frame	3499	8f6d5bae
+frame	3500	2d50ab89
+frame	3501	5a628a95
+frame	3502	d04efc19
+frame	3503	3354f80c
+frame	3504	b68e73fe
+frame	3505	b1fdedc8
+frame	3506	28a07269
+frame	3507	641dbc89
+frame	3508	32831293
+frame	3509	9420aad6
+frame	3510	592755f2
+frame	3511	3ae9364c
+frame	3512	c30a3b24
+frame	3513	4ab6fc8
+frame	3514	d24f1812
+frame	3515	c7869529
+frame	3516	a342f0ba
+frame	3517	2872e84
+frame	3518	321c2cfb
+frame	3519	ea2c631
+frame	3520	f93bd4b0
+frame	3521	e71389e6
+frame	3522	538301de
+frame	3523	98e3ddb7
+frame	3524	fc55e8b9
+frame	3525	64fa47c9
+frame	3526	48b8f8f1
+frame	3527	7513c251
+frame	3528	17a4630
+frame	3529	f8fdfabd
+frame	3530	94e89786
+frame	3531	6e2944f3
+frame	3532	c7637de8
+frame	3533	4e47e819
+frame	3534	3c041772
+frame	3535	231b9576
+frame	3536	853ed7e
+frame	3537	7b43d711
+frame	3538	694e2a18
+frame	3539	3ff85f09
+frame	3540	75986c8b
+frame	3541	d5830ab2
+frame	3542	4b3465a5
+frame	3543	5fb73cb
+frame	3544	2c9c4f46
+frame	3545	d254e66d
+frame	3546	8a510f85
+frame	3547	64ba6bec
+frame	3548	48068e89
+frame	3549	2c96cb86
+frame	3550	e7e305eb
+frame	3551	d25322a6
+frame	3552	40ba694d
+frame	3553	592e7377
+frame	3554	c7bc38d1
+frame	3555	de5e8a25
+frame	3556	4c3c546a
+frame	3557	b6270c82
+frame	3558	99f2a5a9
+frame	3559	ec67fb47
+frame	3560	efcbbe0d
+frame	3561	eb8240c5
+frame	3562	28e004b1
+frame	3563	1a2cf5bf
+frame	3564	ec3ebf85
+frame	3565	7b1b0415
+frame	3566	175c3ebb
+frame	3567	e3e6c2ce
+frame	3568	59a98abe
+frame	3569	bc729924
+frame	3570	2e8db621
+frame	3571	ea25f6b6
+frame	3572	aa0565a0
+frame	3573	7adf4243
+frame	3574	37f406d
+frame	3575	95acfcfa
+frame	3576	93602770
+frame	3577	bff2b487
+frame	3578	5d3616f6
+frame	3579	b673e89c
+frame	3580	580e9f40
+frame	3581	347427d4
+frame	3582	dfa9bf2d
+frame	3583	439eef54
+frame	3584	4b6a1aed
+frame	3585	f3d0139a
+frame	3586	6b8d9ed
+frame	3587	382a32f4
+frame	3588	db693bd4
+frame	3589	75fbdfe4
+frame	3590	ffc459a6
+frame	3591	75e76341
+frame	3592	d48a391d
+frame	3593	8e999fd9
+frame	3594	cf7e6c59
+frame	3595	e3af8c99
+frame	3596	ca6b345b
+frame	3597	c30e3d9b
+frame	3598	e94c8d8c
+frame	3599	88cacc09
+frame	3600	4dcf136f
+state	3600	play	{"t":59.98,"score":0,"gained":"","mode":"dungeon","pick":0,"team":[{"uid":1,"sp":"chispin","lv":1,"xp":0,"type":"brasa","moves":["embestida","chispazo"],"hp":34,"maxhp":34,"atk":11,"def":8,"spd":12,"e
+digits	log	15px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 15px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	14px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+digits	log	bold 17px "Trebuchet MS", "Segoe UI", Verdana, sans-serif	tabular	0
+loop	log	none	no loop() step was marked
+first	log	none	no state.beat
+pressure	none	the game set no number state.margin in play
+steptime	3600	0.002	0.900
+frametime	60	5.1	19.1	60	1	0
+done	3600	play	stop	60.0	1973
+measured	1280x720
+text	play	canvas	24,22,302,35	22.5	16.45	inside	Sala 1 de 6 · Vestíbulo de la fuente
+text	play	canvas	944,23,1255,38	21.0	16.45	inside	Vence a las criaturas para abrir las zarzas
+text	play	canvas	82,663,136,678	21.0	19.83	inside	Chispín
+text	play	canvas	277,663,306,674	21.0	11.81	inside	Nv 1
+text	play	canvas	206,664,236,673	16.5	7.23	inside	Brasa
+text	play	canvas	271,683,309,693	19.5	15.44	inside	34/34
+screen	3600	play	18961586	drawn
+uncaught	0
+shot	/e/Proyectos/new-game/production/qa/evidence/grow-canto-salvaje/story.png	423476

@@ -28,22 +28,26 @@ test('boots to the title screen with no errors @boot', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('a scripted run picks a starter and walks it east, and the same seed repeats it exactly', async ({ page }) => {
-  // The reference replay's opening: Enter leaves the title, Enter picks the first starter,
-  // then a second of walking right. ?manual=1 stops the loop, so only step() moves the game.
+test('a scripted run goes from the camp through the map into the first dungeon, and the same seed repeats it exactly', async ({ page }) => {
+  // Enter leaves the title, Enter picks the first starter (the camp), Enter opens the map,
+  // Enter enters the first dungeon, then a second of walking right.
+  // ?manual=1 stops the loop, so only step() moves the game.
   type Run = { scene: string; mode: string; team: string[]; moved: number; state: unknown };
   async function run(): Promise<Run> {
     await open(page, 'manual=1&seed=7');
     return page.evaluate(() => {
       const g = window.game!;
       const st = () => g.state as { mode: string; team: { sp: string }[]; player: { x: number } };
-      g.press('Enter'); g.step();
-      g.press('Enter'); g.step();
+      const modes: string[] = [];
+      for (let k = 0; k < 4; k++) { g.press('Enter'); g.step(); modes.push(st().mode); }
+      if (modes.join(' ') !== 'starter camp map dungeon') throw new Error('went through ' + modes.join(' '));
       const x0 = st().player.x;
       g.hold('ArrowRight', true); g.step(60); g.hold('ArrowRight', false);
       return { scene: g.scene, mode: st().mode, team: st().team.map(p => p.sp), moved: st().player.x - x0, state: g.state };
     });
   }
+  // The game saves in this browser; each run starts with no save, as a first visit does.
+  await page.addInitScript(() => { try { localStorage.clear(); } catch { /* no storage */ } });
   const first = await run();
   expect(first.scene).toBe('play');
   expect(first.mode).toBe('dungeon');

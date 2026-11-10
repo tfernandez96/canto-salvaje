@@ -18,12 +18,13 @@ After play: No sabia que los parrys te daban, eso está buenisimo, quiero quedar
 After play: Corrección gigante: La tecla si tiene que mostrarse al momento que aparece el círculo. No debe mostrarse al momento de elegir el ataque
 After play: Ahora que ya está esta mazmorra inicial de tutorial, quiero empezar  planear un poco mas avanzado. - Pantalla de selección de mazmorras (o mundo abierto?) - Qué se conserva entre una mazmorra y otra - Componentes RNG de cada mazmorra - Objetos equipables, bufos - Diario de criaturas (Pokedex)
 After play: Estructura: Mapa + campamento · Progreso: Mixto · RNG: Salas barajadas, Criaturas al azar, Modificador por entrada, Salas especiales · Siguiente: Proyecto web real
+After play: Continuemos
 
 **Pitch:** Bajas a una mazmorra con un equipo de hasta 4 mascotas, peleas por turnos con golpes y bloqueos a tiempo, y a cada criatura que derrotas le tocas una canción sanadora para convencerla de unirse a ti.
 
 **Genre:** RPG por turnos de adiestrar mascotas (creature collector + JRPG por turnos)
 
-**Controls:** Flechas/WASD para moverte por la mazmorra. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada golpe tiene su tecla (W, A, S, D o Espacio), de una secuencia propia de cada ataque: aparece dentro del anillo en cuanto el anillo aparece, nunca al elegir el ataque, y se pulsa cuando el anillo se cierra, al golpear y al bloquear. En la canción: ← ↓ ↑ → siguiendo el ritmo.
+**Controls:** Flechas/WASD para moverte por la mazmorra. En el campamento, Arriba/Abajo y Enter; en el mapa, Izquierda/Derecha, Enter para entrar y Retroceso para volver. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada golpe tiene su tecla (W, A, S, D o Espacio), de una secuencia propia de cada ataque: aparece dentro del anillo en cuanto el anillo aparece, nunca al elegir el ataque, y se pulsa cuando el anillo se cierra, al golpear y al bloquear. En la canción: ← ↓ ↑ → siguiendo el ritmo.
 
 **Question:** ¿Se sostiene una sesión de mazmorra donde la pausa táctica del turno y el timing de golpes, bloqueos y canción se alternan sin cansar?
 
@@ -42,7 +43,7 @@ After play: Estructura: Mapa + campamento · Progreso: Mixto · RNG: Salas baraj
 - View: 2.5D · Camera: mazmorra vista desde arriba, ligeramente inclinada; combate fijo de lado (tu equipo a la izquierda, enemigos a la derecha).
 
 ## First minute
-Eliges una de tres mascotas iniciales (Brasa, Brote o Marea). Entras a la primera sala y tocas a una criatura salvaje que deambula. En el combate, el tiempo se detiene: eliges un ataque con 1-4 y un anillo se cierra sobre el enemigo. "Espacio cuando el anillo se cierre" y el golpe crítico salta en grande. El enemigo anuncia su ataque y otro anillo te pide bloquear: lo paras. Cae derrotado, la cinta de pentagrama se tiende hacia él y tocas 6 notas cortas. "¡Se une a tu equipo!", con su nombre y un jingle. Ahora tienes 2 mascotas.
+Eliges una de tres mascotas iniciales (Brasa, Brote o Marea). Llegas al campamento, abres el mapa y entras a la Mazmorra de la Fuente. En la primera sala y tocas a una criatura salvaje que deambula. En el combate, el tiempo se detiene: eliges un ataque con 1-4 y un anillo se cierra sobre el enemigo. "Espacio cuando el anillo se cierre" y el golpe crítico salta en grande. El enemigo anuncia su ataque y otro anillo te pide bloquear: lo paras. Cae derrotado, la cinta de pentagrama se tiende hacia él y tocas 6 notas cortas. "¡Se une a tu equipo!", con su nombre y un jingle. Ahora tienes 2 mascotas.
 
 ## Challenge
 Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 3-4, trae un grupo de 3 con un tipo que tu inicial no cubre: el primer combate de verdad. El jefe llega hacia el minuto 10-12: anuncia un golpe enorme un turno antes, golpea en varias fases de timing y tiene una segunda fase a media vida. Si pierdes, vuelves a la fuente de la entrada con el equipo curado y sin perder nada. Las salas superadas siguen superadas. Más adelante: criaturas más raras con canciones más largas y rápidas.
@@ -73,6 +74,7 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - [x] Marcador claro del objetivo: esquinas, anillo y etiqueta (OBJETIVO, TODOS, CURAR, PROTEGER)
 - [x] Energía compartida del equipo: 5 al empezar, +2 por turno, los ataques gratis recargan (+1 o +2) y cada parada perfecta puede dar +1 (probabilidad parry_config / golpes del ataque; el jefe vale más); panel con libre, reservada, recarga y coste del ataque elegido
 - [x] Cada ataque con una secuencia de teclas, una por golpe (W, A, S, D o Espacio): la tecla aparece en el anillo al aparecer el anillo, nunca al elegir el ataque
+- [x] Campamento (fogata, fuente que cura, menú), mapa de mazmorras que se abren al vencer a cada jefe, y guardado en el navegador con Continuar o Nueva partida
 
 ## Your systems
 - combate por turnos con interacciones a tiempo · in the slice
@@ -82,8 +84,8 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - aprender ataques nuevos · in the slice
 - evolucionar · thin stand-in *(guessed)*
 - una mazmorra pequeña con jefe · in the slice
-- mapa de mazmorras con campamento (fuente, equipo, diario, equipables); cada jefe desbloquea la siguiente · later
-- progreso mixto: mascotas, diario y equipables se conservan; las bendiciones solo duran esa entrada · later
+- mapa de mazmorras con campamento (fuente, equipo, diario, equipables); cada jefe desbloquea la siguiente · in the slice
+- progreso mixto: mascotas, diario y equipables se conservan; las bendiciones solo duran esa entrada · thin stand-in *(guessed)*
 - salas barajadas en cada entrada (hechas a mano, el jefe siempre al final) · later
 - criaturas al azar: tabla por mazmorra con especies, niveles y probabilidad de raras · later
 - modificador por entrada (Niebla: anillos más rápidos; Luna llena: más raras) · later
@@ -109,8 +111,6 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - Variantes raras: change it after play
 - Ataques especiales que se cargan: change it after play
 - Intercambios y combates entre jugadores: needs a server
-- Mapa de mazmorras con campamento: add it as a feature
-- Progreso entre mazmorras y guardado: add it as a feature
 - Salas barajadas, criaturas al azar, modificador por entrada y salas especiales: add it as a feature
 - Objetos equipables y bendiciones: add it as a feature
 - Diario de criaturas: add it as a feature

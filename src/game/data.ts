@@ -1,6 +1,6 @@
 // The tables: types, moves, creatures, rooms. No browser in here.
 
-import type { Move, Room, Species, Theme, TypeInfo } from './types';
+import type { DungeonDef, Move, Room, Species, Theme, TypeInfo } from './types';
 
 export const TYPES: Record<string, TypeInfo> = {
   brasa: { name: 'Brasa', col: '#ff7a3a', beats: 'brote' },
@@ -82,8 +82,8 @@ export const ROOMS: Room[] = [
     '#,,......##.......,#',
     '#.f......##........#',
     '#..................#',
-    '#.....,............D',
-    '#..................D',
+    'L.....,............D',
+    'L..................D',
     '#......,...........#',
     '#,.......##.......,#',
     '#,,......##......,,#',
@@ -159,3 +159,9 @@ export const THEMES: Theme[] = [
   { wallTop: '#4a2a3e', wallBot: '#1c0e1a', floorFar: '#3d2a33', floorNear: '#5d3f40', glow: '#ff7a4a', accent: '#e0315b' },
 ];
 
+
+/** The dungeons on the map, in the order the path visits them. */
+export const DUNGEONS: DungeonDef[] = [
+  { id: 'fuente', name: 'Mazmorra de la Fuente', desc: 'Seis salas y su guardián. Aquí empezó todo.', boss: 'Gólem Raíz', after: null, built: true, x: 330, y: 400, icon: 'arch' },
+  { id: 'espinas', name: 'Bosque de Espinas', desc: 'Criaturas más raras y salas que cambian en cada entrada.', boss: '???', after: 'fuente', built: false, x: 930, y: 270, icon: 'forest' },
+];

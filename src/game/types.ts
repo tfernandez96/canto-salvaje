@@ -37,6 +37,17 @@ export interface Room {
   wilds: { x: number; y: number; group: [string, number][]; boss?: boolean }[];
 }
 
+/** A dungeon on the map. */
+export interface DungeonDef {
+  id: string; name: string; desc: string; boss: string;
+  /** The dungeon whose boss opens this one; null for the first. */
+  after: string | null;
+  /** False for one shown on the map that cannot be entered yet. */
+  built: boolean;
+  /** Where it sits on the map, and how it is drawn there. */
+  x: number; y: number; icon: 'arch' | 'forest';
+}
+
 /** A room's colours, for the battle arena. */
 export interface Theme { wallTop: string; wallBot: string; floorFar: string; floorNear: string; glow: string; accent: string }
 
@@ -97,4 +108,12 @@ export interface RunState {
   tut: { plan: boolean; atk: number; def: number; song: boolean };
   stats: { time: number; battles: number; perfects: number; parries: number; tamed: number; falls: number; released: number };
   resultsT?: number;
+  /** Dungeons whose boss was beaten, by id. */
+  cleared: string[];
+  /** The dungeon being explored. */
+  dungeon: string;
+  /** Cursors of the camp menu and the map. */
+  campSel: number; mapSel: number;
+  /** A dungeon the last boss opened, for the results screen. */
+  opened: string | null;
 }

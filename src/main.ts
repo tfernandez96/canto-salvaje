@@ -6,8 +6,10 @@ import { CONFIG, tune } from './config';
 import { params, manual, clock, seedFrom, install } from './hook';
 import { rng, setSeed } from './game/rng';
 import { clamp, lerp, ease, TAU, hash, bz, typeMult, parryChance, xpNeed, calcStats, calcDmg } from './game/rules';
-import { TYPES, MOVES, KEYCAPS, SPECIES, STARTERS, ROOMS, THEMES } from './game/data';
-import type { Action, Battle, Loose, Move, Pet, PostStep, QueueEntry, RunState, Song, Tally, TallyRow, Theme } from './game/types';
+import { TYPES, MOVES, KEYCAPS, SPECIES, STARTERS, ROOMS, THEMES, DUNGEONS } from './game/data';
+import { isOpen, toSave, fromSave, type SaveData } from './game/progress';
+import { readSave, writeSave, clearSave } from './save-store';
+import type { Action, Battle, DungeonDef, Loose, Move, Pet, PostStep, QueueEntry, RunState, Song, Tally, TallyRow, Theme } from './game/types';
 import {
   W, H, FONT, mainCtx, ctx, setCtx, clear, text, txt, INK, GOLD, CRIM, CYAN, B, fs, el, lg, rg, tube, flame,
   pill, panel, typePill, arrowShape, heart, diamond, keycap, chevron,
@@ -36,16 +38,21 @@ function reset() {
   state = {
     t: 0, score: 0, gained: '', mode: 'starter', pick: 0,
     team: [], room: 0,
-    rooms: ROOMS.map(R => ({ wilds: R.wilds.map((w, i) => ({ x: w.x * T + OX, y: w.y * T + OY, hx: w.x * T + OX, hy: w.y * T + OY, group: w.group, alive: true, boss: !!w.boss, ph: i * 1.7 })) })),
+    rooms: freshRooms(),
     player: { x: 0, y: 0, face: 1, walk: 0, trail: [] },
     battle: null, song: null, tally: null, post: [], learn: null, evo: null,
     fx: [], toast: '', toastT: 0, fade: 0, inv: 0, shake: 0, fountainT: 0,
     tut: { plan: false, atk: 0, def: 0, song: false },
     stats: { time: 0, battles: 0, perfects: 0, parries: 0, tamed: 0, falls: 0, released: 0 },
+    cleared: [], dungeon: DUNGEONS[0].id, campSel: 0, mapSel: 0, opened: null,
   };
   placePlayer(0, ROOMS[0].spawn![0], ROOMS[0].spawn![1]);
 }
 const T = 64, OX = 0, OY = 8, WH = 26;
+/** A dungeon as it is on a fresh entry: every wild group home and alive. */
+function freshRooms() {
+  return ROOMS.map(R => ({ wilds: R.wilds.map((w, i) => ({ x: w.x * T + OX, y: w.y * T + OY, hx: w.x * T + OX, hy: w.y * T + OY, group: w.group, alive: true, boss: !!w.boss, ph: i * 1.7 })) }));
+}
 function placePlayer(room: number, tx: number, ty: number) {
   state.room = room; const p = state.player; p.x = tx * T + OX; p.y = ty * T + OY; p.trail = [];
   for (let i = 0; i < 30; i++) p.trail.push([p.x - 1, p.y]);
@@ -113,6 +120,7 @@ function updDungeon(dt: number) {
     return;
   }
   if (p.x < OX + 0.55 * T && tileAt(state.room, 0, row) === 'L') {
+    if (state.room === 0) { sfx('door'); goCamp('Vuelves al campamento. La mazmorra empieza de cero en la próxima entrada.'); return; }
     placePlayer(state.room - 1, 18.8, (p.y - OY) / T); state.fade = 0.45; sfx('door'); toast(ROOMS[state.room].name, 2); return;
   }
   // fountain
@@ -589,7 +597,11 @@ function nextPost() {
 function finishBattle() {
   const Bt: Battle = state.battle;
   if (Bt && Bt.boss) {
-    state.gained = '¡El Gólem Raíz descansa en paz!'; state.score = state.stats.perfects + state.stats.parries;
+    const dg = DUNGEONS.find(d => d.id === state.dungeon)!;
+    state.gained = `¡El ${dg.boss} descansa en paz!`; state.score = state.stats.perfects + state.stats.parries;
+    state.opened = null;
+    if (!state.cleared.includes(dg.id)) { state.cleared.push(dg.id); const nx = DUNGEONS.find(d => d.after === dg.id); state.opened = nx ? nx.name : null; }
+    saveRun();
     state.mode = 'dungeon'; scene = 'results'; state.resultsT = 0; sfx('join'); return;
   }
   for (const p of state.team) {
@@ -597,6 +609,7 @@ function finishBattle() {
     p.hp = Math.min(p.maxhp, p.hp + heal); p.ghost = p.hp; p.faintT = 0; p.guard = false;
   }
   const news = Bt && Bt.doorNews;
+  saveRun();
   state.battle = null; state.tally = null; state.mode = 'dungeon'; state.inv = 1.2; state.fade = 0.35;
   if (news) { toast('Las zarzas se retiran: el camino sigue hacia el este.', 3); sfx('door'); }
 }
@@ -629,9 +642,152 @@ function updStarter() {
   const d = digit(); if (d >= 0 && d < 3) state.pick = d;
   if (tap('ok') || (d >= 0 && d < 3)) {
     state.team = [makePet(STARTERS[state.pick], 1)];
-    state.mode = 'dungeon'; state.fade = 0.5; sfx('join');
-    toast('Toca a una criatura salvaje para combatir. La fuente cura a tu equipo.', 4.5);
+    sfx('join'); goCamp('Tu campamento: abre el mapa de mazmorras para elegir adónde ir.');
   }
+}
+
+// ---- Camp, map and save ------------------------------------------------------------------
+// Brief: design/game-brief.md, Your systems (map with camp, mixed progress) and Build order step 4.
+let titleSave: SaveData | null = null, titleSel = 0, titleConfirm = false;
+/** Reads the stored save again for the title screen. */
+function refreshTitle() { titleSave = fromSave(readSave()); titleSel = 0; titleConfirm = false; }
+/** Stores what the run keeps between dungeons; false when the browser refuses. */
+function saveRun(): boolean { return writeSave(toSave(state, uidN)); }
+/** Puts a save's team, beaten dungeons and tallies into the fresh run. */
+function applySave(d: SaveData) { state.team = d.team; state.cleared = d.cleared; state.stats = d.stats; state.tut = d.tut; uidN = d.uidN; }
+/** Back at camp: the team fully healed, any battle left behind, and the run saved. */
+function goCamp(msg: string) {
+  for (const p of state.team) { p.hp = p.maxhp; p.ghost = p.hp; p.faintT = 0; p.guard = false; p.flash = 0; }
+  state.battle = null; state.song = null; state.tally = null; state.post = []; state.learn = null; state.evo = null;
+  state.mode = 'camp'; state.campSel = 0; state.fade = 0.5; scene = 'play';
+  toast(saveRun() ? msg : `${msg} (este navegador no guarda la partida)`, 4);
+}
+/** A fresh entry into a dungeon, at its first room. */
+function enterDungeon(d: DungeonDef) {
+  state.dungeon = d.id; state.rooms = freshRooms(); placePlayer(0, ROOMS[0].spawn![0], ROOMS[0].spawn![1]);
+  state.mode = 'dungeon'; state.fade = 0.5; state.inv = 1; sfx('door');
+  toast(`${d.name}: sal por el oeste de la primera sala para volver al campamento.`, 4.5);
+}
+const CAMP_OPTIONS = ['Mapa de mazmorras', 'Guardar partida', 'Volver al título'];
+function updCamp() {
+  const n = CAMP_OPTIONS.length;
+  if (tap('up')) { state.campSel = (state.campSel + n - 1) % n; sfx('select'); }
+  if (tap('down')) { state.campSel = (state.campSel + 1) % n; sfx('select'); }
+  if (!tap('ok')) return;
+  sfx('confirm');
+  if (state.campSel === 0) {
+    state.mode = 'map'; state.toastT = 0;
+    state.mapSel = Math.max(0, DUNGEONS.findIndex(d => isOpen(d, state.cleared) && d.built && !state.cleared.includes(d.id)));
+  } else if (state.campSel === 1) toast(saveRun() ? 'Partida guardada.' : 'Este navegador no deja guardar la partida.', 2.5);
+  else { saveRun(); refreshTitle(); scene = 'title'; }
+}
+function updMap() {
+  const n = DUNGEONS.length;
+  if (tap('left')) { state.mapSel = (state.mapSel + n - 1) % n; sfx('select'); }
+  if (tap('right')) { state.mapSel = (state.mapSel + 1) % n; sfx('select'); }
+  if (tap('back')) { state.mode = 'camp'; sfx('select'); return; }
+  if (!tap('ok')) return;
+  const d = DUNGEONS[state.mapSel];
+  if (!isOpen(d, state.cleared)) { sfx('deny'); toast(lockedLine(d), 3); return; }
+  if (!d.built) { sfx('deny'); toast('Próximamente: este camino todavía se está abriendo.', 3); return; }
+  enterDungeon(d);
+}
+/** Why a closed dungeon is closed, in the player's words. */
+function lockedLine(d: DungeonDef): string {
+  const prev = DUNGEONS.find(x => x.id === d.after)!;
+  return `Cerrada: vence al ${prev.boss} de la ${prev.name}.`;
+}
+function drawCamp() {
+  ctx.fillStyle = lg(0, 0, 0, H, ['#0a1224', '#16233a', '#1d2a2a']); ctx.fillRect(0, 0, W, H);
+  for (let k = 0; k < 70; k++) { const a = 0.35 + 0.35 * Math.sin(state.t * 1.5 + k); ctx.fillStyle = `rgba(230,240,255,${a})`; ctx.fillRect(hash(k, 3) * W, hash(k, 7) * 300, 2, 2); }
+  ctx.save(); ctx.shadowColor = '#fff6dc'; ctx.shadowBlur = 30; B(); ctx.arc(1110, 96, 30, 0, TAU); ctx.fillStyle = '#f4ead0'; ctx.fill(); ctx.restore();
+  B(); ctx.arc(1124, 86, 27, 0, TAU); ctx.fillStyle = '#111c32'; ctx.fill();
+  ctx.fillStyle = '#132020'; B(); ctx.moveTo(0, 400); for (let x = 0; x <= W; x += 40) ctx.lineTo(x, 330 + Math.sin(x * 0.01) * 26); ctx.lineTo(W, 400); ctx.closePath(); ctx.fill();
+  for (let k = 0; k < 24; k++) { const x = k * 58 + hash(k, 11) * 30 - 20, h = 80 + hash(k, 13) * 80, y = 378; B(); ctx.moveTo(x, y - h); ctx.lineTo(x + 24, y); ctx.lineTo(x - 24, y); ctx.closePath(); fs('#0d1914', 2); }
+  ctx.fillStyle = lg(0, 370, 0, H, ['#26361f', '#18221a']); ctx.fillRect(0, 370, W, H - 370);
+  for (let k = 0; k < 40; k++) { const x = hash(k, 31) * W, y = 400 + hash(k, 37) * 240; ctx.strokeStyle = 'rgba(110,160,70,0.5)'; ctx.lineWidth = 2; B(); ctx.moveTo(x, y); ctx.lineTo(x - 3, y - 9); ctx.moveTo(x, y); ctx.lineTo(x + 4, y - 8); ctx.stroke(); }
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(640, 530, 10, 640, 530, 380); g.addColorStop(0, 'rgba(255,160,70,0.36)'); g.addColorStop(1, 'rgba(255,160,70,0)'); ctx.fillStyle = g; ctx.fillRect(240, 150, 800, 760);
+  ctx.restore();
+  // the tent, the fountain, the fire
+  B(); ctx.moveTo(130, 530); ctx.lineTo(250, 380); ctx.lineTo(370, 530); ctx.closePath(); fs(lg(130, 0, 370, 0, ['#e0c084', '#a8834a']), 3);
+  B(); ctx.moveTo(228, 530); ctx.lineTo(250, 440); ctx.lineTo(274, 530); ctx.closePath(); fs('#2a1c12', 2);
+  tube(() => { ctx.moveTo(250, 382); ctx.lineTo(250, 356); }, 3, '#7a5636');
+  B(); ctx.moveTo(250, 358); ctx.lineTo(276, 366); ctx.lineTo(250, 374); ctx.closePath(); fs(CRIM, 2);
+  drawFountain(1050, 480);
+  for (const r of [-0.35, 0.35]) { ctx.save(); ctx.translate(640, 546); ctx.rotate(r); B(); ctx.roundRect(-48, -8, 96, 16, 7); fs('#6a4428', 3); ctx.restore(); }
+  for (let k = 0; k < 3; k++) flame(640 + (k - 1) * 14, 540, 640 + (k - 1) * 10, k === 1 ? 452 : 482, 13 - Math.abs(k - 1) * 4, ['#fff3a0', '#ffb030', '#e2452a'], Math.sin(state.t * 10 + k) * 5);
+  // the team around the fire, facing it; the trainer plays beside it
+  const seats = [[470, 492], [814, 492], [404, 590], [880, 590]];
+  state.team.forEach((p, i) => { const [x, y] = seats[i]; drawFigure(p.sp, x, y, clamp(84 / Math.max(FIG_H(p.sp), FIG_W(p.sp) * 0.8), 0.4, 0.95), x < 640 ? 1 : -1, { t: state.t + i * 1.3 }); });
+  drawFigure('trainer', 560, 616, 1.15, 1, { t: state.t, play: true });
+  panel(10, 10, 450, 72, GOLD, 0.85);
+  txt('Campamento', 28, 34, 24, '#fff6dc', 'left', true);
+  txt(`Mazmorras superadas: ${state.cleared.length} de ${DUNGEONS.length}  ·  tu equipo descansa y se cura`, 28, 62, 15, '#d8d0e8', 'left');
+  panel(880, 120, 380, 214, GOLD, 0.9);
+  CAMP_OPTIONS.forEach((o, k) => {
+    const y = 162 + k * 52, sel = k === state.campSel;
+    if (sel) { B(); ctx.roundRect(896, y - 21, 348, 42, 10); ctx.fillStyle = 'rgba(242,193,78,0.22)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = GOLD; ctx.stroke(); chevron(918, y - 2, 8, GOLD); }
+    txt(o, 938, y, 20, sel ? '#fff6dc' : '#bfb4d0', 'left', true);
+  });
+  txt('Arriba / Abajo y Enter', 1070, 316, 14, '#9f94b8', 'center');
+  drawTeamStrip(652);
+}
+function mapArch(x: number, y: number) {
+  B(); ctx.moveTo(x - 46, y); ctx.lineTo(x - 46, y - 50); ctx.arc(x, y - 50, 46, Math.PI, 0); ctx.lineTo(x + 46, y); ctx.closePath(); fs(lg(x - 46, 0, x + 46, 0, ['#a39e86', '#6e6a5c']), 3);
+  B(); ctx.moveTo(x - 26, y); ctx.lineTo(x - 26, y - 46); ctx.arc(x, y - 46, 26, Math.PI, 0); ctx.lineTo(x + 26, y); ctx.closePath(); fs('#1c1426', 2);
+  ctx.save(); ctx.shadowColor = CYAN; ctx.shadowBlur = 14; B(); el(x, y - 10, 12, 6); fs(CYAN, 0); ctx.restore();
+  tube(() => { ctx.moveTo(x - 40, y - 70); ctx.quadraticCurveTo(x - 20, y - 98, x + 8, y - 92); }, 3, '#4f8a35');
+}
+function mapForest(x: number, y: number) {
+  for (const [dx, h, c] of [[-34, 70, '#3f6b3a'], [30, 80, '#355f33'], [0, 96, '#4a7a40']] as [number, number, string][]) {
+    B(); ctx.moveTo(x + dx, y - h); ctx.lineTo(x + dx + 26, y); ctx.lineTo(x + dx - 26, y); ctx.closePath(); fs(c, 3);
+  }
+  tube(() => { ctx.moveTo(x - 50, y - 6); ctx.bezierCurveTo(x - 20, y - 30, x + 20, y + 4, x + 52, y - 18); }, 4, '#5a2a4a');
+  for (let k = 0; k < 5; k++) { const tx = x - 44 + k * 22, ty = y - 14 + (k % 2) * 8; B(); ctx.moveTo(tx, ty); ctx.lineTo(tx + 7, ty - 6); ctx.lineTo(tx + 3, ty + 3); ctx.closePath(); fs('#e6edc0', 1.5); }
+}
+function padlock(x: number, y: number) {
+  B(); ctx.arc(x, y - 8, 12, Math.PI, 0); ctx.lineWidth = 8; ctx.strokeStyle = INK; ctx.stroke(); ctx.lineWidth = 4; ctx.strokeStyle = '#c0b8a0'; ctx.stroke();
+  B(); ctx.roundRect(x - 17, y - 8, 34, 28, 5); fs(lg(0, y - 8, 0, y + 20, ['#e2c050', '#a8862a']), 3);
+  B(); el(x, y + 3, 4, 4); fs(INK, 0); ctx.fillStyle = INK; ctx.fillRect(x - 1.5, y + 3, 3, 9);
+}
+function drawMap() {
+  ctx.fillStyle = '#0b0a14'; ctx.fillRect(0, 0, W, H);
+  B(); ctx.roundRect(70, 30, 1140, 572, 18); fs(lg(0, 30, 0, 602, ['#efdfb2', '#d9bf86', '#c9a86a']), 4);
+  B(); ctx.roundRect(88, 48, 1104, 536, 12); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(90,60,30,0.5)'; ctx.stroke();
+  txt('Mapa de mazmorras', 640, 84, 32, '#3a2414', 'center', true, false);
+  ctx.save(); B(); ctx.roundRect(88, 48, 1104, 536, 12); ctx.clip(); // the scenery stays on the parchment
+  for (let k = 0; k < 7; k++) { B(); el(160 + k * 160, 540 - hash(k, 5) * 40, 96, 34); ctx.fillStyle = 'rgba(120,140,80,0.32)'; ctx.fill(); }
+  ctx.strokeStyle = 'rgba(70,130,170,0.6)'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+  B(); ctx.moveTo(640, 120); ctx.bezierCurveTo(560, 250, 720, 380, 620, 580); ctx.stroke();
+  for (let k = 0; k < 16; k++) {
+    const x = 130 + hash(k, 21) * 1020, y = 140 + hash(k, 23) * 420;
+    if (Math.abs(x - 640) < 90 || DUNGEONS.some(d => Math.hypot(d.x - x, d.y - y) < 130)) continue;
+    B(); ctx.moveTo(x, y - 18); ctx.lineTo(x + 9, y); ctx.lineTo(x - 9, y); ctx.closePath(); fs('rgba(70,100,60,0.55)', 0);
+  }
+  ctx.restore();
+  ctx.save(); ctx.setLineDash([14, 12]); ctx.lineWidth = 5; ctx.strokeStyle = '#7a5230';
+  for (let i = 1; i < DUNGEONS.length; i++) { const a = DUNGEONS[i - 1], b = DUNGEONS[i]; B(); ctx.moveTo(a.x, a.y + 20); ctx.bezierCurveTo((a.x + b.x) / 2, a.y + 140, (a.x + b.x) / 2, b.y - 100, b.x, b.y + 20); ctx.stroke(); }
+  ctx.restore();
+  DUNGEONS.forEach((d, i) => {
+    const open = isOpen(d, state.cleared), sel = i === state.mapSel, done = state.cleared.includes(d.id);
+    B(); el(d.x, d.y + 30, 78, 22); ctx.fillStyle = sel ? 'rgba(242,193,78,0.55)' : 'rgba(90,60,30,0.22)'; ctx.fill();
+    if (sel) { ctx.lineWidth = 4; ctx.strokeStyle = '#b07a1a'; ctx.stroke(); }
+    ctx.save(); if (!open) ctx.globalAlpha = 0.45;
+    if (d.icon === 'arch') mapArch(d.x, d.y + 30); else mapForest(d.x, d.y + 30);
+    ctx.restore();
+    if (!open) padlock(d.x, d.y - 4);
+    if (done) { tube(() => { ctx.moveTo(d.x + 52, d.y + 26); ctx.lineTo(d.x + 52, d.y - 40); }, 3, '#5a3a1a'); B(); ctx.moveTo(d.x + 54, d.y - 40); ctx.lineTo(d.x + 84, d.y - 30); ctx.lineTo(d.x + 54, d.y - 20); ctx.closePath(); fs(GOLD, 2); }
+    txt(d.name, d.x, d.y + 72, 20, '#3a2414', 'center', true, false);
+    const status = done ? 'Superada' : !open ? 'Cerrada' : !d.built ? 'Próximamente' : 'Abierta';
+    txt(status, d.x, d.y + 96, 16, done ? '#2f6b2a' : !open ? '#8a2a1a' : '#5a3a1a', 'center', true, false);
+    if (sel) chevron(d.x, d.y - 100 + Math.sin(state.t * 5) * 5, 14, GOLD);
+  });
+  const d = DUNGEONS[state.mapSel], open = isOpen(d, state.cleared);
+  panel(70, 612, 1140, 98, GOLD, 0.92);
+  txt(d.name, 96, 638, 22, '#fff6dc', 'left', true);
+  txt(!open ? lockedLine(d) : !d.built ? 'Próximamente: este camino todavía se está abriendo.' : d.desc, 96, 666, 16, '#e8e0f0', 'left');
+  txt('Izquierda / Derecha: elegir   ·   Enter: entrar   ·   Retroceso: volver al campamento', 96, 692, 14, '#bfb4d0', 'left');
 }
 
 // ---- Drawing: dungeon --------------------------------------------------------------------
@@ -1255,7 +1411,21 @@ const scenes: Record<string, { update(dt: number): void; draw(): void }> = {
     },
   },
   title: {
-    update() { state.t += STEP; if (pressed('Enter') || pressed('Space') || pressed('NumpadEnter')) { reset(); scene = 'play'; sfx('confirm'); } },
+    update() {
+      state.t += STEP;
+      const go = pressed('Enter') || pressed('Space') || pressed('NumpadEnter');
+      if (!titleSave) { if (go) { reset(); scene = 'play'; sfx('confirm'); } return; }
+      if (titleConfirm) {
+        if (go) { clearSave(); titleSave = null; reset(); scene = 'play'; sfx('confirm'); }
+        else if (tap('back')) { titleConfirm = false; sfx('select'); }
+        return;
+      }
+      if (tap('up') || tap('down') || tap('left') || tap('right')) { titleSel = 1 - titleSel; sfx('select'); }
+      if (go) {
+        if (titleSel === 0) { const sv = titleSave; reset(); applySave(sv); sfx('confirm'); goCamp('De vuelta en el campamento.'); }
+        else { titleConfirm = true; sfx('select'); }
+      }
+    },
     draw() {
       drawArena(THEMES[0]);
       ctx.fillStyle = 'rgba(6,8,22,0.45)'; ctx.fillRect(0, 0, W, H);
@@ -1271,7 +1441,19 @@ const scenes: Record<string, { update(dt: number): void; draw(): void }> = {
       panel(250, 448, 780, 196, GOLD, 0.88);
       CONTROLS.forEach((c, i) => txt(c, W / 2, 478 + i * 30, 17, '#e8e0f0', 'center'));
       const p = 0.6 + Math.sin(state.t * 4) * 0.4;
-      txt('Enter para empezar', W / 2, 680, 26, `rgba(255,246,220,${p})`, 'center', true);
+      if (!titleSave) txt('Enter para empezar', W / 2, 680, 26, `rgba(255,246,220,${p})`, 'center', true);
+      else if (titleConfirm) {
+        panel(300, 652, 680, 60, CRIM, 0.95);
+        txt('¿Borrar la partida guardada y empezar de cero?', W / 2, 670, 18, '#ffd8e0', 'center', true);
+        txt('Enter: sí, borrar   ·   Retroceso: no', W / 2, 696, 15, '#e8e0f0', 'center');
+      } else {
+        const opts = [`Continuar · ${titleSave.team.length} mascota${titleSave.team.length > 1 ? 's' : ''}`, 'Nueva partida'];
+        opts.forEach((o, k) => {
+          const x = W / 2 + (k ? 190 : -190), sel = k === titleSel;
+          if (sel) chevron(x - 120, 676, 9, GOLD);
+          txt(o, x, 682, sel ? 26 : 22, sel ? `rgba(255,227,154,${0.75 + 0.25 * p})` : '#a8a0c0', 'center', true);
+        });
+      }
     },
   },
   play: {
@@ -1281,6 +1463,8 @@ const scenes: Record<string, { update(dt: number): void; draw(): void }> = {
       updFx(dt);
       switch (state.mode) {
         case 'starter': updStarter(); break;
+        case 'camp': updCamp(); break;
+        case 'map': updMap(); break;
         case 'dungeon': updDungeon(dt); break;
         case 'battle': updBattle(dt); break;
         case 'song': updSong(dt); break;
@@ -1293,6 +1477,8 @@ const scenes: Record<string, { update(dt: number): void; draw(): void }> = {
       ctx.save();
       switch (state.mode) {
         case 'starter': drawStarter(); break;
+        case 'camp': drawCamp(); break;
+        case 'map': drawMap(); break;
         case 'dungeon': drawDungeon(); break;
         case 'battle': drawBattle(); break;
         case 'song': drawSong(); break;
@@ -1317,19 +1503,20 @@ const scenes: Record<string, { update(dt: number): void; draw(): void }> = {
   results: {
     update(dt) {
       state.t += dt; state.resultsT = (state.resultsT || 0) + dt; updFx(dt);
-      if (state.resultsT > 1 && pressed('Enter')) { reset(); scene = 'play'; }
+      if (state.resultsT > 1 && pressed('Enter')) goCamp(state.opened ? `Se abrió en el mapa: ${state.opened}.` : 'De vuelta en el campamento.');
     },
     draw() {
       drawArena(THEMES[5]); ctx.fillStyle = 'rgba(6,8,22,0.55)'; ctx.fillRect(0, 0, W, H);
       ctx.save(); ctx.shadowColor = GOLD; ctx.shadowBlur = 20; txt(state.gained || '¡Mazmorra superada!', W / 2, 90, 46, '#ffe39a', 'center', true); ctx.restore();
       txt('La mazmorra está a salvo. Tu equipo:', W / 2, 140, 20, '#e8fbff', 'center');
+      if (state.opened) txt(`En el mapa se abre: ${state.opened}`, W / 2, 176, 20, '#ffd36b', 'center', true);
       state.team.forEach((p, i) => { const x = 640 + (i - (state.team.length - 1) / 2) * 250; drawFigure(p.sp, x, 400, 1, 1, { t: state.t + i, side: 'team' }); txt(`${nameOf(p)}  Nv ${p.lv}`, x, 432, 18, '#fff', 'center', true); });
       const st = state.stats, mm = Math.floor(st.time / 60), ss = Math.floor(st.time % 60);
       panel(290, 470, 700, 170, GOLD, 0.9);
       txt(`Tiempo ${mm}:${String(ss).padStart(2, '0')}   ·   Combates ${st.battles}   ·   Caídas ${st.falls}`, W / 2, 504, 19, '#fff6dc', 'center', true);
       txt(`Golpes perfectos ${st.perfects}   ·   Paradas ${st.parries}`, W / 2, 540, 19, '#bfefff', 'center', true);
       txt(`Mascotas convencidas con tu canción ${st.tamed}`, W / 2, 576, 19, '#d8ffd0', 'center', true);
-      txt('Enter para jugar de nuevo', W / 2, 616, 18, '#e8e0f0', 'center');
+      txt('Enter para volver al campamento', W / 2, 616, 18, '#e8e0f0', 'center');
     },
   },
 };
@@ -1365,6 +1552,7 @@ install({
 });
 
 reset();
+refreshTitle();
 scene = params.get('scene') || 'title';
 last = clock.now();
 if (manual) drawFrame();

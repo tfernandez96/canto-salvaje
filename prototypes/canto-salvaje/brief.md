@@ -14,6 +14,7 @@ Los protagonistas son humanos, que "adiestran" mascotas (evito usar la palabra c
 8. Trozo o prueba: Arranquemos con un trozo para probar la sesión, luego vamos refinando las mecánicas
 After play: MUY Bueno el juego. Para el combate añadiría: - Marcador claro de a qué objetivo estás atacando. - Invertir controles: Izquierda-derecha cambian los ataques, arriba-abajo los objetivos (ya que estos se muestran a la derecha, de arriba hacia abajo) - Mejoras sobre la energía: Que sea compartida, y haya indicadores claros sobre cuanto suman - A la hora de atacar/esquivar, que cada ataque tenga un boton asociado (wasd o barra), y al usar ese ataque, haya que presionar esa tecla en lugar de solo la barra
 After play: Ya quedó deployado, está buenisimo. Cambiaría el sistema de teclas. Está buenisimo que cada ataque tenga su "velocidad" o su forma única de cerrar el círculo, me parece excelente eso. Pero es feo que te diga "Apretá W al atacar", esa leyenda la sacaría al 100%, que quede oculto. Y que cada ataque tenga un array interno de botones. Pueden ser siempre el mismo, o pueden variar, dependiendo los ataques. Está completamente roto el sistema de energía: Se están ganando unos 7 de energía por turno. Yo arrancaría con 5 energía el primer turno, y de ahí en mas se ganan 2 de energía por turno. Los ataques que no gastan energía, pasarían a recargar energía adicional. (1, 2 o mas, dependiendo el ataque), forzandote a ser consciente del manejo de la misma.
+After play: No sabia que los parrys te daban, eso está buenisimo, quiero quedar esa mecánica. Cuando los parrys perfectos den energía, pone un +1 energía. Y Bajemos la frecuencia, digamos que cada ataque tiene su propio parry_config. Por default es 1 (si es multihit, cada hit va a tener 1/total_hits probabilidad. Pero es importante que los bosses tengan un parry_config mas alto, ya que suele ser 1 solo enemigo.
 
 **Pitch:** Bajas a una mazmorra con un equipo de hasta 4 mascotas, peleas por turnos con golpes y bloqueos a tiempo, y a cada criatura que derrotas le tocas una canción sanadora para convencerla de unirse a ti.
 
@@ -67,7 +68,7 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - [x] 4 especies salvajes, cada una atacando distinto, más el jefe con un ataque gordo anunciado
 - [x] Números de daño que saltan, barras con estela, y recuento de victoria con fanfarria
 - [x] Marcador claro del objetivo: esquinas, anillo y etiqueta (OBJETIVO, TODOS, CURAR, PROTEGER)
-- [x] Energía compartida del equipo: 5 al empezar, +2 por turno, los ataques gratis recargan (+1 o +2); panel con libre, reservada, recarga y coste del ataque elegido
+- [x] Energía compartida del equipo: 5 al empezar, +2 por turno, los ataques gratis recargan (+1 o +2) y cada parada perfecta puede dar +1 (probabilidad parry_config / golpes del ataque; el jefe vale más); panel con libre, reservada, recarga y coste del ataque elegido
 - [x] Cada ataque con una secuencia oculta de teclas, una por golpe (W, A, S, D o Espacio), sin leyenda en pantalla
 
 ## Your systems
@@ -82,6 +83,7 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 
 ## Keep
 - que cada ataque tenga su "velocidad" o su forma única de cerrar el círculo *(you said)* · pins: ring_attack 0.7, ring_defend 0.75
+- que los parrys perfectos den energía *(you said)* · pins: en_parry 1, parry_config 1
 
 ## Avoid
 - La palabra "capturar", y nada de Pokémon: sin bolas de captura, sin sus nombres, criaturas, arte ni interfaz.

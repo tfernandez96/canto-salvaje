@@ -25,7 +25,7 @@ const CONTROLS = [
   'Flechas o WASD: moverte por la mazmorra',
   'En tu turno: Izquierda/Derecha ataque · Arriba/Abajo objetivo · Enter confirma',
   'Al aparecer cada anillo, su tecla (W, A, S, D o Espacio): púlsala cuando se cierre',
-  'Flechas: las notas de la canción sanadora',
+  'Canción: A S D F, o flechas izquierda / abajo / derecha y Espacio',
   'P: pausa  ·  M: silencio',
 ];
 const CHEAP = params.get('render') === 'cheap'; // a headless shot or check: 3D would draw cheap; players never see it
@@ -246,8 +246,9 @@ function defaultTarget() {
 function updPlan() {
   const Bt: Battle = state.battle, p = state.team[Bt.cur];
   const n = p.moves.length;
-  if (tap('left')) { Bt.sel = (Bt.sel + n - 1) % n; defaultTarget(); sfx('select'); }
-  if (tap('right')) { Bt.sel = (Bt.sel + 1) % n; defaultTarget(); sfx('select'); }
+  const reselect = (k: number) => { const keep = MOVES[p.moves[Bt.sel]].target === MOVES[p.moves[k]].target; Bt.sel = k; if (!keep) defaultTarget(); sfx('select'); };
+  if (tap('left')) reselect((Bt.sel + n - 1) % n);
+  if (tap('right')) reselect((Bt.sel + 1) % n);
   const m = MOVES[p.moves[Bt.sel]], opts = targetOptions(p, m);
   if (opts.length > 1) {
     if (tap('up')) { Bt.tgt = (Bt.tgt + opts.length - 1) % opts.length; sfx('select'); }
@@ -255,7 +256,7 @@ function updPlan() {
   }
   const d = digit();
   let confirm = tap('ok');
-  if (d >= 0 && d < n) { if (d !== Bt.sel) { Bt.sel = d; defaultTarget(); } confirm = true; }
+  if (d >= 0 && d < n) { if (d !== Bt.sel) { const keep = MOVES[p.moves[Bt.sel]].target === MOVES[p.moves[d]].target; Bt.sel = d; if (!keep) defaultTarget(); } confirm = true; }
   if (confirm) {
     let mm = MOVES[p.moves[Bt.sel]], oo = targetOptions(p, mm), moveId = p.moves[Bt.sel];
     if (mm.en > availEn()) {
@@ -475,9 +476,16 @@ function afterLose() {
 }
 
 // ---- The healing song ------------------------------------------------------------------
-const SONG_HX = 930, SONG_X0 = 250;
 const LANE_COL = ['#ff8fb8', '#5ff2ff', '#9cff7a', '#ffd36b'];
-const LANE_KEYS = [['ArrowLeft', 'KeyA'], ['ArrowDown', 'KeyS'], ['ArrowUp', 'KeyW'], ['ArrowRight', 'KeyD']];
+/** The four lanes, left to right: A or Left, S or Down, D or Right, F or Space. */
+const LANE_KEYS = [['KeyA', 'ArrowLeft'], ['KeyS', 'ArrowDown'], ['KeyD', 'ArrowRight'], ['KeyF', 'Space']];
+// The staff in perspective: the creature at its far end, the hit line near the player.
+// d is how far a note still has to travel: 1 where it appears, 0 on the hit line.
+const HW_TOP = 150, HW_HIT = 600, HW_CX = 640, HW_W = 640, HW_FAR = 0.25;
+const hwScale = (d: number): number => 1 / (1 + 3 * d);
+const hwY = (d: number): number => HW_TOP + (HW_HIT - HW_TOP) * (hwScale(d) - HW_FAR) / (1 - HW_FAR);
+/** x of a lane edge (0 to 4; a lane's centre is l + 0.5) at depth d. */
+const hwX = (edge: number, d: number): number => HW_CX + (edge - 2) * (HW_W / 4) * hwScale(d);
 const SCALE = [262, 294, 330, 392, 440, 523, 587, 659, 784, 880];
 function teamAvgLv() { return state.team.reduce((s, p) => s + p.lv, 0) / Math.max(1, state.team.length); }
 function songLen(e: Pet) {
@@ -499,14 +507,10 @@ function beginSong() {
 }
 function songJudge(note: Loose, res: string) {
   const S: Song = state.song; note.judged = true; note.res = res;
-  const y = laneY(note.lane, SONG_HX);
-  if (res === 'perfect') { S.perfect++; S.score += 1; tone(note.f, 0.32, 'triangle', 0.24); tone(note.f * 2, 0.2, 'sine', 0.08); burst(SONG_HX, y, LANE_COL[note.lane], 10, 180); pop('¡Perfecta!', SONG_HX + 70, y, LANE_COL[note.lane], 20, { vx: 40, vy: -30, g: 0, life: 0.6 }); }
-  else if (res === 'good') { S.good++; S.score += 0.6; tone(note.f, 0.25, 'triangle', 0.18); burst(SONG_HX, y, LANE_COL[note.lane], 6, 120); pop('Bien', SONG_HX + 60, y, '#e8f8ff', 18, { vx: 40, vy: -30, g: 0, life: 0.5 }); }
-  else { S.miss++; tone(note.f * 0.5, 0.18, 'sawtooth', 0.08, 0, 0.8); pop('Falla', SONG_HX + 60, y, '#b0a8c0', 18, { vx: 40, vy: -30, g: 0, life: 0.5 }); }
-}
-function laneY(l: number, x: number) {
-  const S: Song = state.song; const tt = S ? S.t : 0;
-  return 262 + l * 56 + Math.sin(x / 150 + tt * 2) * 9 * clamp((SONG_HX - x) / 260, 0, 1);
+  const x = hwX(note.lane + 0.5, 0), y = HW_HIT - 40;
+  if (res === 'perfect') { S.perfect++; S.score += 1; tone(note.f, 0.32, 'triangle', 0.24); tone(note.f * 2, 0.2, 'sine', 0.08); burst(x, HW_HIT, LANE_COL[note.lane], 10, 180); pop('¡Perfecta!', x, y, LANE_COL[note.lane], 20, { vx: 0, vy: -40, g: 0, life: 0.6 }); }
+  else if (res === 'good') { S.good++; S.score += 0.6; tone(note.f, 0.25, 'triangle', 0.18); burst(x, HW_HIT, LANE_COL[note.lane], 6, 120); pop('Bien', x, y, '#e8f8ff', 18, { vx: 0, vy: -40, g: 0, life: 0.5 }); }
+  else { S.miss++; tone(note.f * 0.5, 0.18, 'sawtooth', 0.08, 0, 0.8); pop('Falla', x, y, '#b0a8c0', 18, { vx: 0, vy: -40, g: 0, life: 0.5 }); }
 }
 function updSong(dt: number) {
   const S: Song = state.song; S.t += dt;
@@ -687,13 +691,40 @@ function drawTouchPad() {
     region(x, y, w, h + 6, press(code));
   }
 }
-/** The four song lanes as big buttons along the bottom. */
-function drawLaneButtons() {
+/** The song's staff in perspective: its five lines are the four lanes, beat lines run down it, and each lane is a button. */
+function drawStaff(S: Song) {
+  const dFar = 1, dNear = -0.035;
+  B(); ctx.moveTo(hwX(0, dFar), hwY(dFar)); ctx.lineTo(hwX(4, dFar), hwY(dFar)); ctx.lineTo(hwX(4, dNear), hwY(dNear)); ctx.lineTo(hwX(0, dNear), hwY(dNear)); ctx.closePath();
+  ctx.fillStyle = lg(0, HW_TOP, 0, HW_HIT + 40, ['rgba(95,242,255,0.12)', 'rgba(16,12,34,0.82)', 'rgba(242,193,78,0.2)']); ctx.fill();
+  const flash = S.flashL || [0, 0, 0, 0];
   for (let l = 0; l < 4; l++) {
-    const x = 12 + l * 316, y = 612, w = 304, h = 100;
-    B(); ctx.roundRect(x, y, w, h, 16); ctx.fillStyle = 'rgba(14,12,28,0.88)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = LANE_COL[l]; ctx.stroke();
-    ctx.save(); ctx.shadowColor = LANE_COL[l]; ctx.shadowBlur = 12; arrowShape(l, x + w / 2, y + h / 2, 30, LANE_COL[l], INK, 3); ctx.restore();
-    region(x, y, w, h, press(LANE_KEYS[l][0]));
+    if (flash[l] <= 0) continue;
+    B(); ctx.moveTo(hwX(l, dFar), hwY(dFar)); ctx.lineTo(hwX(l + 1, dFar), hwY(dFar)); ctx.lineTo(hwX(l + 1, dNear), hwY(dNear)); ctx.lineTo(hwX(l, dNear), hwY(dNear)); ctx.closePath();
+    ctx.fillStyle = lg(0, HW_TOP, 0, HW_HIT, ['rgba(0,0,0,0)', LANE_COL[l]]); ctx.save(); ctx.globalAlpha = 0.28 * flash[l]; ctx.fill(); ctx.restore();
+  }
+  if (S.phase === 'play' && S.beat) { // beat lines run toward the player
+    const t0 = tune.song_travel + 0.9;
+    for (let k = Math.floor((S.t - t0) / S.beat); k < Math.floor((S.t - t0) / S.beat) + 12; k++) {
+      const d = (t0 + k * S.beat - S.t) / tune.song_travel; if (d <= 0 || d >= 1) continue;
+      B(); ctx.moveTo(hwX(0, d), hwY(d)); ctx.lineTo(hwX(4, d), hwY(d)); ctx.lineWidth = 1.5; ctx.strokeStyle = `rgba(220,250,255,${0.08 + 0.18 * (1 - d)})`; ctx.stroke();
+    }
+  }
+  ctx.save(); ctx.shadowColor = CYAN; ctx.shadowBlur = 10;
+  for (let e2 = 0; e2 <= 4; e2++) { B(); ctx.moveTo(hwX(e2, dFar), hwY(dFar)); ctx.lineTo(hwX(e2, dNear), hwY(dNear)); ctx.lineWidth = e2 === 0 || e2 === 4 ? 3 : 2; ctx.strokeStyle = 'rgba(220,250,255,0.8)'; ctx.stroke(); }
+  ctx.shadowColor = GOLD; ctx.shadowBlur = 16; B(); ctx.moveTo(hwX(0, 0) - 8, HW_HIT); ctx.lineTo(hwX(4, 0) + 8, HW_HIT); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,227,154,0.95)'; ctx.stroke();
+  ctx.restore();
+  const lw = HW_W / 4, dirs = [0, 1, 3];
+  for (let l = 0; l < 4; l++) {
+    const cx = hwX(l + 0.5, 0), w = lw * 0.86, fl = Math.max(0, flash[l]);
+    ctx.save(); ctx.shadowColor = LANE_COL[l]; ctx.shadowBlur = 8 + fl * 22;
+    B(); ctx.roundRect(cx - w / 2, HW_HIT - 14, w, 28, 12); ctx.fillStyle = fl > 0 ? LANE_COL[l] : 'rgba(14,12,28,0.85)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = LANE_COL[l]; ctx.stroke();
+    ctx.restore();
+    if (!pointer.active) { // the lane's keys, drawn under its pad
+      txt(['A', 'S', 'D', 'F'][l], cx - 14, HW_HIT + 38, 22, LANE_COL[l], 'center', true);
+      if (l < 3) arrowShape(dirs[l], cx + 16, HW_HIT + 38, 8, LANE_COL[l], INK, 2);
+      else txt('ESPACIO', cx + 30, HW_HIT + 38, 11, LANE_COL[l], 'center', true);
+    }
+    if (S.phase === 'play') region(hwX(l, 0), 280, lw, H - 280, press(LANE_KEYS[l][0]));
   }
 }
 /** A tapped move card: pick it and use it at the enemy or ally last tapped, if it can reach them. */
@@ -1141,54 +1172,57 @@ function drawIntents() {
 }
 function drawPlanPanel() {
   const Bt: Battle = state.battle, p = state.team[Bt.cur]; if (!p) return;
-  const y = 574, avail = availEn();
+  const y = 574, avail = availEn(), aim = aimedFoe();
   panel(10, y, W - 20, 138, GOLD, 0.92);
   const s = clamp(84 / Math.max(FIG_H(p.sp), FIG_W(p.sp) * 0.7), 0.3, 0.9);
   ctx.save(); B(); ctx.roundRect(22, y + 12, 112, 114, 10); ctx.fillStyle = '#26314a'; ctx.fill(); ctx.clip();
   drawFigure(p.sp, 78, y + 118, s, 1, { t: state.t, noShadow: true }); ctx.restore();
-  txt(nameOf(p), 146, y + 26, 20, '#fff', 'left', true);
-  txt(`Nv ${p.lv}`, 146, y + 52, 15, GOLD, 'left', true);
-  typePill(p.type, 196, y + 52, 12);
-  txt(`PV ${p.hp}/${p.maxhp}`, 146, y + 78, 14, '#e8e0f0', 'left');
+  txt(nameOf(p), 146, y + 22, 20, '#fff', 'left', true);
+  txt(`Nv ${p.lv}`, 146, y + 46, 15, GOLD, 'left', true);
+  typePill(p.type, 196, y + 46, 12);
+  txt(`PV ${p.hp}/${p.maxhp}`, 146, y + 68, 14, '#e8e0f0', 'left');
+  for (let k = 0; k < tune.en_max; k++) diamond(153 + k * 13, y + 90, 6.5, k < avail ? CYAN : '#2a2a40'); // free energy, as prisms
   let back = Bt.cur - 1; while (back >= 0 && state.team[back].hp <= 0) back--;
-  if (pointer.active && back >= 0) button(146, y + 88, 120, 34, 'Volver', press('Backspace'), false, 15);
-  else txt(`Energía libre ${avail}`, 146, y + 102, 14, '#bfefff', 'left', true);
+  if (pointer.active && back >= 0) button(146, y + 104, 110, 28, 'Volver', press('Backspace'), false, 14);
   for (let k = 0; k < 4; k++) {
-    const id = p.moves[k], cx = 290 + (k % 2) * 318, cy = y + 10 + Math.floor(k / 2) * 54;
-    B(); ctx.roundRect(cx, cy, 306, 48, 10);
+    const id = p.moves[k], cx = 288 + (k % 2) * 486, cy = y + 8 + Math.floor(k / 2) * 58, w = 474, h = 52;
+    B(); ctx.roundRect(cx, cy, w, h, 10);
     if (!id) { ctx.fillStyle = 'rgba(40,36,60,0.5)'; ctx.fill(); continue; }
-    region(cx, cy, 306, 48, () => planPick(k));
+    region(cx, cy, w, h, () => planPick(k));
     const m = MOVES[id], can = m.en <= avail, sel = k === Bt.sel;
+    const tm = aim && m.kind === 'hit' ? typeMult(m.type, aim.type) : 1;
     ctx.fillStyle = sel ? 'rgba(242,193,78,0.22)' : 'rgba(40,36,66,0.85)'; ctx.fill();
     ctx.lineWidth = sel ? 3 : 1.5; ctx.strokeStyle = sel ? GOLD : 'rgba(255,255,255,0.2)'; ctx.stroke();
-    pill(cx + 8, cy + 10, 28, 28, sel ? GOLD : '#3a3460', null); txt(String(k + 1), cx + 22, cy + 24, 16, sel ? '#1b1426' : '#fff', 'center', true, false);
-    txt(m.name, cx + 46, cy + 15, 16, can ? '#fff' : '#7a7090', 'left', true);
-    typePill(m.type, cx + 46, cy + 35, 11);
+    pill(cx + 8, cy + 12, 28, 28, sel ? GOLD : '#3a3460', null); txt(String(k + 1), cx + 22, cy + 26, 16, sel ? '#1b1426' : '#fff', 'center', true, false);
+    txt(m.name, cx + 46, cy + 16, 17, can ? '#fff' : '#7a7090', 'left', true);
+    typePill(m.type, cx + 46, cy + 38, 11);
     const info = m.kind === 'hit' ? `${m.pow} x ${m.hits}${m.target === 'all' ? ' · a todos' : ''}${m.feint ? ' · finta' : ''}` : m.kind === 'heal' ? 'cura a un aliado' : m.target === 'team' ? 'protege al equipo' : 'se protege';
-    txt(info, cx + 120, cy + 35, 13, can ? '#d8d0e8' : '#6a6080', 'left');
-    for (let e = 0; e < m.en; e++) diamond(cx + 292 - e * 14, cy + 14, 5.5, can ? CYAN : '#3a3a55');
-    if (m.gain) txt(`+${m.gain} energía`, cx + 298, cy + 14, 13, '#9cff7a', 'right', true);
-    else if (!m.en) txt('gratis', cx + 298, cy + 14, 13, '#9cff7a', 'right');
+    txt(info, cx + 124, cy + 38, 13, can ? '#d8d0e8' : '#6a6080', 'left');
+    for (let e = 0; e < m.en; e++) diamond(cx + w - 18 - e * 18, cy + 16, 7.5, can ? CYAN : '#3a3a55'); // what it costs
+    for (let e = 0; e < (m.gain || 0); e++) diamond(cx + w - 18 - e * 18, cy + 16, 7.5, '#7cf06a'); // what it gives back
+    if (tm > 1) effMark(cx + w - 30, cy + 36, true); else if (tm < 1) effMark(cx + w - 30, cy + 36, false);
   }
-  txt(pointer.active ? 'Toca un enemigo para apuntar   ·   toca un ataque para usarlo' : 'Izquierda / Derecha: ataque   ·   Arriba / Abajo: objetivo   ·   1-4 / Enter: confirmar   ·   Retroceso: volver', 606, y + 127, 13, '#9f94b8', 'center');
-  const m = MOVES[p.moves[Bt.sel]], opts = targetOptions(p, m);
-  const ix = 942;
-  if (m.target === 'one' && opts.length) {
-    const e = Bt.enemies[opts[clamp(Bt.tgt, 0, opts.length - 1)]], tm = typeMult(m.type, e.type);
-    txt('Objetivo', ix, y + 18, 14, '#bfb4d0', 'left');
-    txt(nameOf(e), ix, y + 40, 18, '#ffe0e6', 'left', true);
-    txt(tm > 1 ? '¡Eficaz!  x' + tune.type_strong : tm < 1 ? 'Poco eficaz  x' + tune.type_weak : 'Daño normal', ix, y + 64, 15, tm > 1 ? '#ffd36b' : tm < 1 ? '#b0a8c0' : '#e8e0f0', 'left', true);
-    if (opts.length > 1) txt(pointer.active ? 'Toca otro enemigo para cambiar' : 'Arriba / Abajo: cambiar objetivo', ix, y + 112, 13, '#bfb4d0', 'left');
-  } else if (m.target === 'ally' && opts.length) {
-    const q = state.team[opts[clamp(Bt.tgt, 0, opts.length - 1)]];
-    txt('Curar a', ix, y + 18, 14, '#bfb4d0', 'left'); txt(`${nameOf(q)}  ${q.hp}/${q.maxhp}`, ix, y + 40, 18, '#d8ffd0', 'left', true);
-    if (opts.length > 1) txt(pointer.active ? 'Toca otro aliado para cambiar' : 'Arriba / Abajo: cambiar aliado', ix, y + 112, 13, '#bfb4d0', 'left');
-  } else {
-    txt(m.target === 'all' ? 'Golpea a todos los enemigos' : m.target === 'team' ? 'Mitad de daño al equipo este turno' : 'Mitad de daño este turno', ix, y + 30, 15, '#e8e0f0', 'left', true);
-    if (m.kind === 'guard') txt('Actúa antes que nadie', ix, y + 56, 14, '#9fd8ff', 'left');
+  txt(pointer.active ? 'Toca un enemigo para apuntar   ·   toca un ataque para usarlo' : 'Izquierda / Derecha: ataque   ·   Arriba / Abajo: objetivo   ·   1-4 / Enter: confirmar   ·   Retroceso: volver', 766, y + 130, 13, '#9f94b8', 'center');
+}
+/** The enemy the cards are judged against: the one the marked move aims at, else the one last tapped, else the first standing. */
+function aimedFoe(): Pet | null {
+  const Bt: Battle = state.battle, p = state.team[Bt.cur]; if (!p) return null;
+  const m = MOVES[p.moves[Bt.sel]];
+  if (m.target === 'one') { const o = targetOptions(p, m); if (o.length) return Bt.enemies[o[clamp(Bt.tgt, 0, o.length - 1)]]; }
+  if (Bt.foeTap != null && Bt.enemies[Bt.foeTap] && Bt.enemies[Bt.foeTap].hp > 0) return Bt.enemies[Bt.foeTap];
+  return Bt.enemies.find(e => e.hp > 0) || null;
+}
+/** Effectiveness on a card, with no words: two gold chevrons up when strong, one grey chevron down when weak. */
+function effMark(x: number, y: number, strong: boolean) {
+  const marks = strong ? [-5, 4] : [0];
+  for (const dy of marks) {
+    B();
+    if (strong) { ctx.moveTo(x - 9, y + dy + 4); ctx.lineTo(x, y + dy - 5); ctx.lineTo(x + 9, y + dy + 4); }
+    else { ctx.moveTo(x - 9, y - 4); ctx.lineTo(x, y + 5); ctx.lineTo(x + 9, y - 4); }
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.lineWidth = 6; ctx.strokeStyle = INK; ctx.stroke();
+    ctx.lineWidth = 3.5; ctx.strokeStyle = strong ? '#ffd36b' : '#8a8098'; ctx.stroke();
   }
-  if (m.gain) txt(`Gratis: recarga +${m.gain} energía`, ix, y + 88, 14, '#9cff7a', 'left', true);
-  else if (m.en) txt(`Cuesta ${m.en} de energía`, ix, y + 88, 14, '#bfefff', 'left', true);
 }
 // The shared energy: what is free, what the chosen moves have reserved, what the move under the cursor would take.
 function drawPool() {
@@ -1331,53 +1365,43 @@ function drawSong() {
   }
   if (S.phase === 'result') tapAll('Enter');
   const calm = S.phase === 'play' ? S.score / S.notes.length : S.ok ? 1 : S.score / S.notes.length;
-  // the ribbon: a luminous staff from the trainer to the creature
-  const yTop = laneY(0, SONG_X0) - 30, yBot = laneY(3, SONG_X0) + 30;
-  ctx.save();
-  const band = lg(SONG_X0, 0, SONG_HX + 60, 0, ['rgba(242,193,78,0.18)', 'rgba(95,242,255,0.22)']);
-  B(); for (let x = SONG_X0; x <= SONG_HX + 60; x += 20) { const y = laneY(0, x) - 30; x === SONG_X0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
-  for (let x = SONG_HX + 60; x >= SONG_X0; x -= 20) ctx.lineTo(x, laneY(3, x) + 30);
-  ctx.closePath(); ctx.fillStyle = band; ctx.fill();
-  for (let l = 0; l < 4; l++) {
-    ctx.shadowColor = LANE_COL[l]; ctx.shadowBlur = 10;
-    B(); for (let x = SONG_X0; x <= SONG_HX + 60; x += 10) { const y = laneY(l, x); x === SONG_X0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
-    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(220,250,255,0.75)'; ctx.stroke();
-  }
-  ctx.restore();
-  drawFigure('trainer', 168, 560, 1.7, 1, { t: state.t, play: true });
+  // the creature waits at the far end of the staff; the trainer plays at the near end
   const shake = S.phase === 'play' ? (1 - calm) * 3 * Math.sin(state.t * 40) : 0;
   const hop = S.phase === 'result' && S.ok ? Math.abs(Math.sin(S.t * 6)) * 18 : 0;
-  drawFigure(e.sp, 1090 + shake, 560 - hop, 1.15, -1, { t: state.t, side: 'enemy', flash: S.phase === 'result' && !S.ok ? 0 : (1 - calm) * 0.45, flashCol: '#ff3a5a', alpha: S.phase === 'result' && !S.ok ? clamp(1 - S.t / 1.5, 0, 1) : 1 });
-  for (let l = 0; l < 4; l++) {
-    const y = laneY(l, SONG_HX), f = Math.max(0, S.flashL ? S.flashL[l] : 0);
-    ctx.save(); ctx.shadowColor = LANE_COL[l]; ctx.shadowBlur = 8 + f * 20;
-    arrowShape(l, SONG_HX, y, 18 + f * 4, f > 0 ? LANE_COL[l] : 'rgba(20,18,36,0.9)', LANE_COL[l], 3); ctx.restore();
-  }
+  ctx.save(); const halo = ctx.createRadialGradient(HW_CX, HW_TOP - 50, 10, HW_CX, HW_TOP - 50, 230);
+  halo.addColorStop(0, 'rgba(95,242,255,0.22)'); halo.addColorStop(1, 'rgba(95,242,255,0)'); ctx.fillStyle = halo; ctx.fillRect(HW_CX - 230, HW_TOP - 280, 460, 460); ctx.restore();
+  drawFigure(e.sp, HW_CX + shake, HW_TOP + 6 - hop, 0.85, -1, { t: state.t, side: 'enemy', flash: S.phase === 'result' && !S.ok ? 0 : (1 - calm) * 0.45, flashCol: '#ff3a5a', alpha: S.phase === 'result' && !S.ok ? clamp(1 - S.t / 1.5, 0, 1) : 1 });
+  drawStaff(S);
+  drawFigure('trainer', 168, 700, 1.5, 1, { t: state.t, play: true });
   if (S.phase === 'play') {
     for (const nt of S.notes) {
       if (nt.judged && nt.res !== 'miss') continue;
-      const u = (nt.at - S.t) / tune.song_travel; if (u > 1.05) continue;
-      const x = SONG_HX - u * (SONG_HX - SONG_X0); if (x > SONG_HX + 50) continue;
-      const y = laneY(nt.lane, x);
-      ctx.save(); ctx.globalAlpha = nt.res === 'miss' ? 0.3 : clamp((1.05 - u) * 4, 0, 1);
-      ctx.shadowColor = LANE_COL[nt.lane]; ctx.shadowBlur = 14;
-      arrowShape(nt.lane, x, y, 17, nt.res === 'miss' ? '#606070' : LANE_COL[nt.lane], INK, 3); ctx.restore();
+      const d = (nt.at - S.t) / tune.song_travel; if (d > 1 || d < -0.05) continue;
+      const sc = hwScale(d), y = hwY(d), cx = hwX(nt.lane + 0.5, d), w = HW_W / 4 * sc * 0.78, h = Math.max(5, 22 * sc);
+      ctx.save(); ctx.globalAlpha = nt.res === 'miss' ? 0.35 : clamp((1 - d) * 5, 0, 1);
+      ctx.shadowColor = LANE_COL[nt.lane]; ctx.shadowBlur = 16 * sc;
+      B(); ctx.roundRect(cx - w / 2, y - h / 2, w, h, h / 2); fs(nt.res === 'miss' ? '#606070' : LANE_COL[nt.lane], 2);
+      ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(cx - w * 0.36, y - h * 0.22, w * 0.72, Math.max(1.5, h * 0.18));
+      ctx.restore();
     }
-    if (S.t < tune.song_travel + 0.9 - 4 * S.beat) txt('¡Prepárate!', 640, 200, 30, '#fff6dc', 'center', true);
-    else if (S.t < tune.song_travel + 0.9) txt(String(4 - S.ticks + 1 > 4 ? 4 : Math.max(1, 4 - S.ticks + 1)), 640, 200, 36, GOLD, 'center', true);
+    if (S.t < tune.song_travel + 0.9 - 4 * S.beat) txt('¡Prepárate!', HW_CX, 380, 30, '#fff6dc', 'center', true);
+    else if (S.t < tune.song_travel + 0.9) txt(String(4 - S.ticks + 1 > 4 ? 4 : Math.max(1, 4 - S.ticks + 1)), HW_CX, 380, 40, GOLD, 'center', true);
   }
   panel(20, 18, 560, 74, CYAN, 0.88);
   txt(`Canción sanadora para ${nameOf(e)}`, 40, 42, 21, '#e8fbff', 'left', true);
   txt(`${rare ? 'Rara' : 'Común'} · Nv ${e.lv} frente a tu equipo (Nv medio ${teamAvgLv().toFixed(1)}) · ${S.notes.length} notas`, 40, 70, 15, rare ? '#ff9fc8' : '#bfefff', 'left');
-  const mx = 1000, my = 200;
+  const mx = 1010, my = 52;
   txt('Confianza', mx, my - 18, 15, '#e8fbff', 'left', true);
   ctx.fillStyle = '#1a1424'; B(); ctx.roundRect(mx - 2, my - 2, 224, 16, 6); ctx.fill();
   ctx.fillStyle = lg(mx, 0, mx + 220, 0, ['#ff8fb8', '#ffd36b', '#9cff7a']); ctx.fillRect(mx, my, 220 * clamp(calm, 0, 1), 12);
   ctx.fillStyle = '#fff'; ctx.fillRect(mx + 220 * tune.song_pass - 1, my - 5, 3, 22);
-  if (!state.tut.song && S.phase === 'play') { panel(310, 520, 560, 50, '#9cff7a', 0.9); txt('Pulsa la flecha de cada nota cuando llegue al corazón de la cinta', 590, 545, 16, '#e8ffe0', 'center', true); }
+  if (!state.tut.song && S.phase === 'play') {
+    panel(20, 100, 530, 48, '#9cff7a', 0.9); // beside the staff, never over where the notes appear
+    txt(pointer.active ? 'Toca el carril cuando la nota toque la línea' : 'Pulsa la tecla del carril (A S D F) cuando la nota toque la línea', 285, 124, 15, '#e8ffe0', 'center', true);
+  }
   if (S.phase === 'result') {
     if (S.ok) {
-      for (let k = 0; k < 6; k++) heart(1060 + Math.sin(S.t * 2 + k) * 50, 420 - ((S.t * 70 + k * 40) % 220), 9, '#ff8fb8');
+      for (let k = 0; k < 6; k++) heart(HW_CX + Math.sin(S.t * 2 + k) * 70, HW_TOP - ((S.t * 70 + k * 40) % 140), 9, '#ff8fb8');
       panel(340, 210, 600, 90, '#9cff7a', 0.92);
       txt(`¡${nameOf(e)} se une a tu equipo!`, 640, 244, 30, '#d8ffd0', 'center', true);
       txt(`${S.perfect} perfectas · ${S.good} bien · ${S.miss} falladas`, 640, 278, 16, '#e8e0f0', 'center');
@@ -1395,7 +1419,7 @@ function drawSong() {
     button(490, 334, 300, 46, `Dejar ir a ${nameOf(e)}`, press('Backspace'));
     state.team.forEach((p, i) => region(12 + i * 316, 650, 304, 64, press('Digit' + (i + 1))));
   }
-  if (S.phase === 'play' && pointer.active) drawLaneButtons(); else drawTeamStrip(652);
+  if (S.phase !== 'play') drawTeamStrip(652);
   cornerButtons(10);
   if (S.phase === 'swap') state.team.forEach((p, i) => { pill(12 + i * 316 + 262, 640, 30, 24, GOLD, INK); txt(String(i + 1), 12 + i * 316 + 277, 652, 15, '#1b1426', 'center', true, false); });
 }

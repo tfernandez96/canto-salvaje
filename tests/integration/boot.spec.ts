@@ -95,7 +95,7 @@ test('in a battle turn, a tap on an attack card uses it on the enemy tapped befo
   });
   expect(reached).toBe('plan');
   await page.mouse.click(888, 480); await page.evaluate(() => window.game!.step());   // the enemy
-  await page.mouse.click(760, 608); await page.evaluate(() => window.game!.step());   // card 2: Chispazo
+  await page.mouse.click(1010, 608); await page.evaluate(() => window.game!.step());  // card 2: Chispazo
   const after = await page.evaluate(() => {
     const b = (window.game!.state as { battle: { phase: string; plans: ({ move: string; target: number } | null)[] } }).battle;
     return { phase: b.phase, plan: b.plans[0] };
@@ -117,5 +117,47 @@ test('in a battle turn, a tap on an attack card uses it on the enemy tapped befo
   await page.mouse.click(padX[key], 673); await page.evaluate(() => window.game!.step());
   const res = await page.evaluate(() => (window.game!.state as { battle: { act: { hits: { res: string }[] } } }).battle.act.hits[0].res);
   expect(['perfect', 'good']).toContain(res);
+  expect(errors).toEqual([]);
+});
+
+test('the healing song runs down four lanes: a note is hit by its key (A S D F) or by a tap on its lane', async ({ page }, info) => {
+  await page.addInitScript(() => { try { localStorage.clear(); } catch { /* no storage */ } });
+  const errors = await open(page, 'manual=1&seed=7');
+  type Note = { lane: number; at: number; res: string };
+  type St = { mode: string; battle: { phase: string; enemies: { hp: number }[] } | null; song: { phase: string; t: number; notes: Note[] } | null };
+  // Into the first battle, the wild creature already worn out (a shortcut through the state), and won.
+  const mode = await page.evaluate(() => {
+    const g = window.game!, st = () => g.state as St;
+    for (let k = 0; k < 4; k++) { g.press('Enter'); g.step(); }
+    g.hold('ArrowRight', true);
+    for (let i = 0; i < 600 && st().mode !== 'battle'; i++) g.step(1, false);
+    g.hold('ArrowRight', false);
+    for (let i = 0; i < 600 && st().battle!.phase !== 'plan'; i++) g.step(1, false);
+    st().battle!.enemies.forEach(e => { e.hp = 0; });
+    g.press('Enter'); g.step(1, false);
+    for (let i = 0; i < 900 && st().mode !== 'song'; i++) g.step(1, false);
+    g.press('Enter'); g.step(1, false);            // the offer: play the song
+    return st().mode + ' ' + st().song!.phase;
+  });
+  expect(mode).toBe('song play');
+  // The first note by its key, on the beat.
+  const first = await page.evaluate(() => {
+    const g = window.game!, S = () => (g.state as St).song!;
+    while (S().t < S().notes[0].at - 0.005) g.step(1, false);
+    g.press(['KeyA', 'KeyS', 'KeyD', 'KeyF'][S().notes[0].lane]); g.step(1, false);
+    return S().notes[0].res;
+  });
+  expect(['perfect', 'good']).toContain(first);
+  // Halfway to the second note: a look at the staff, then a tap on the second note's lane as it lands.
+  const lane = await page.evaluate(() => {
+    const g = window.game!, S = () => (g.state as St).song!, n = S().notes[1];
+    while (S().t < n.at - 0.6) g.step(1, false);
+    g.step(1);
+    return n.lane;
+  });
+  await page.screenshot({ path: info.outputPath('song-staff.png') });
+  await page.evaluate(() => { const g = window.game!, S = () => (g.state as St).song!; while (S().t < S().notes[1].at - 0.005) g.step(1, false); g.step(1); });
+  await page.mouse.click(640 + (lane + 0.5 - 2) * 160, 560); await page.evaluate(() => window.game!.step(1, false));
+  expect(['perfect', 'good']).toContain(await page.evaluate(() => (window.game!.state as St).song!.notes[1].res));
   expect(errors).toEqual([]);
 });

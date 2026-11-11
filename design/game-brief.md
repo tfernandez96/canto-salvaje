@@ -20,12 +20,13 @@ After play: Ahora que ya está esta mazmorra inicial de tutorial, quiero empezar
 After play: Estructura: Mapa + campamento · Progreso: Mixto · RNG: Salas barajadas, Criaturas al azar, Modificador por entrada, Salas especiales · Siguiente: Proyecto web real
 After play: Continuemos
 After play: Si, hace commit. Ahora, podemos hacerlo touch-able con el mouse, y refinar la experiencia para mobile?
+After play: Se podría cambiar la parte de música por algo como esa foto? Y al tener la vista vertical, los controles podrían ser: A o left, S o abajo, D o derecha, F o Espacio. Te parece bien? Es muy poco natural como está hasta el momento. Además, con esa estructura es muchisimo mas usable en mobile. Mejoras de tablero de selección de ataque: - Quitar panel de Objetivo, donde te dice la eficacia del ataque. - Poner algún indicador en el ataque mismo, que te indique la eficacia contra el objetivo seleccionado. - Cambiar el +1 energía, por un prisma verde, simbolizando que añade energía, sin decirlo explícitamente. - En Vez de decir Energía libre 5, poner 5 prismas llenos y 5 vacíos (Simbolizando 5/10)
 
 **Pitch:** Bajas a una mazmorra con un equipo de hasta 4 mascotas, peleas por turnos con golpes y bloqueos a tiempo, y a cada criatura que derrotas le tocas una canción sanadora para convencerla de unirse a ti.
 
 **Genre:** RPG por turnos de adiestrar mascotas (creature collector + JRPG por turnos)
 
-**Controls:** Flechas/WASD para moverte por la mazmorra. En el campamento, Arriba/Abajo y Enter; en el mapa, Izquierda/Derecha, Enter para entrar y Retroceso para volver. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada golpe tiene su tecla (W, A, S, D o Espacio), de una secuencia propia de cada ataque: aparece dentro del anillo en cuanto el anillo aparece, nunca al elegir el ataque, y se pulsa cuando el anillo se cierra, al golpear y al bloquear. En la canción: ← ↓ ↑ → siguiendo el ritmo. Con mouse o pantalla táctil: todo lo que se ve se toca; en la mazmorra se mantiene el dedo para caminar hacia él; en tu turno se toca un enemigo para apuntar y un ataque para usarlo; los anillos y la canción muestran botones grandes abajo.
+**Controls:** Flechas/WASD para moverte por la mazmorra. En el campamento, Arriba/Abajo y Enter; en el mapa, Izquierda/Derecha, Enter para entrar y Retroceso para volver. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada golpe tiene su tecla (W, A, S, D o Espacio), de una secuencia propia de cada ataque: aparece dentro del anillo en cuanto el anillo aparece, nunca al elegir el ataque, y se pulsa cuando el anillo se cierra, al golpear y al bloquear. En la canción, cuatro carriles: A o ←, S o ↓, D o →, F o Espacio, cuando la nota toca la línea. Con mouse o pantalla táctil: todo lo que se ve se toca; en la mazmorra se mantiene el dedo para caminar hacia él; en tu turno se toca un enemigo para apuntar y un ataque para usarlo; los anillos muestran botones grandes abajo y en la canción se toca el carril.
 
 **Question:** ¿Se sostiene una sesión de mazmorra donde la pausa táctica del turno y el timing de golpes, bloqueos y canción se alternan sin cansar?
 
@@ -38,7 +39,7 @@ After play: Si, hace commit. Ahora, podemos hacerlo touch-able con el mouse, y r
   - **Mood:** aventura viva y musical.
   - **Shapes:** mascotas redondeadas y expresivas, cada especie con su propia silueta. Enemigos más angulosos. El jefe es grande y asimétrico.
   - **Palette:** tu equipo con contorno dorado cálido; amenazas en carmesí y magenta; suelo de piedra musgosa en verdes y grises azulados. El acento son las notas y las ventanas de timing en cian luminoso. Sombras frías, luces cálidas.
-  - **Signature:** durante la canción, una cinta de pentagrama luminosa se tiende desde tu equipo hasta la criatura, y las notas viajan por ella.
+  - **Signature:** la canción es una cinta de pentagrama luminosa vista en perspectiva: sus cinco líneas son los cuatro carriles, la criatura espera al fondo y las notas bajan hacia quien adiestra.
   - Cada figura está dibujada: sin emoji y sin círculos planos.
 - References: Pokémon Black and White 2 (sprites 2.5D detallados sobre campos 3D, la sensación del equipo), Clair Obscur: Expedition 33 (golpes y paradas a tiempo dentro de un combate por turnos).
 - View: 2.5D · Camera: mazmorra vista desde arriba, ligeramente inclinada; combate fijo de lado (tu equipo a la izquierda, enemigos a la derecha).
@@ -65,7 +66,7 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - [x] Mazmorra pequeña: 5-6 salas y el jefe
 - [x] Combate por turnos con pausa para elegir el ataque de cada mascota y franja de orden de turno
 - [x] Golpes a tiempo (crítico) y bloqueo o parada a tiempo (parada perfecta = sin daño + contragolpe)
-- [x] Canción sanadora: minijuego de ritmo con 4 botones. Su longitud depende de la rareza y del nivel de la criatura respecto al tuyo
+- [x] Canción sanadora: minijuego de ritmo en cuatro carriles verticales (A S D F, o tocando el carril). Su longitud depende de la rareza y del nivel de la criatura respecto al tuyo
 - [x] Equipo de hasta 4 mascotas, empezando por elegir 1 de 3 iniciales
 - [x] Tres tipos en ciclo (Brasa > Brote > Marea > Brasa), con aviso de golpe fuerte o débil
 - [x] Niveles por experiencia y ataques nuevos al subir de nivel
@@ -77,6 +78,7 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - [x] Cada ataque con una secuencia de teclas, una por golpe (W, A, S, D o Espacio): la tecla aparece en el anillo al aparecer el anillo, nunca al elegir el ataque
 - [x] Campamento (fogata, fuente que cura, menú), mapa de mazmorras que se abren al vencer a cada jefe, y guardado en el navegador con Continuar o Nueva partida
 - [x] Se juega con mouse o pantalla táctil (botones grandes para los anillos y la canción, pausa y silencio en pantalla) y en el teléfono: sin zoom ni desplazamiento, pantalla completa en horizontal donde el navegador lo permite, aviso para girar el teléfono
+- [x] Panel de turno sin palabras de más: la eficacia contra el objetivo marcado va en cada carta (chevrones), la energía que da un ataque es un prisma verde y la libre una fila de prismas llenos y vacíos
 
 ## Your systems
 - combate por turnos con interacciones a tiempo · in the slice

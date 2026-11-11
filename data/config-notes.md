@@ -47,11 +47,16 @@ holds no comments. The values themselves are in `data/config.json`.
 - `release_xp`: XP x level for letting a convinced creature go when the team is full
 
 ---- The healing song ----
-- `song_base_comun`: notes for a common creature at your level
-- `song_base_rara`: notes for a rare creature at your level
-- `song_per_level`: notes added per level it is above your team's average
+- `song_secs_comun`: s a common creature's song lasts at your team's level
+- `song_secs_rara`: s for a rare one
+- `song_secs_superrara`: s for a super rare one
+- `song_secs_legendaria`: s for a legendary one with no length of its own (each legendary sets songSecs in src/game/data.ts)
+- `song_secs_per_level`: s added per level the creature is above your team's average (taken off below it)
+- `song_secs_min`: the shortest a song gets
+- `song_secs_max`: the longest a song gets
 - `song_bpm`: beats per minute, common creatures
 - `song_bpm_rare_bonus`: extra bpm for rare ones
+- `song_bpm_epic_bonus`: extra bpm for super rare and legendary ones (they use the rare half-beat chance)
 - `song_half_comun`: chance a gap is half a beat, common
 - `song_half_rara`: chance a gap is half a beat, rare
 - `song_travel`: s a note takes along the ribbon

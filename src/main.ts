@@ -5,7 +5,7 @@
 import { CONFIG, tune } from './config';
 import { params, manual, clock, seedFrom, install } from './hook';
 import { rng, setSeed } from './game/rng';
-import { clamp, lerp, ease, TAU, hash, bz, typeMult, parryChance, xpNeed, calcStats, calcDmg } from './game/rules';
+import { clamp, lerp, ease, TAU, hash, bz, typeMult, parryChance, xpNeed, calcStats, calcDmg, songSeconds, songTempo, RARITY_NAME } from './game/rules';
 import { TYPES, MOVES, KEYCAPS, SPECIES, STARTERS, ROOMS, THEMES, DUNGEONS } from './game/data';
 import { isOpen, toSave, fromSave, type SaveData } from './game/progress';
 import { readSave, writeSave, clearSave } from './save-store';
@@ -488,20 +488,22 @@ const hwY = (d: number): number => HW_TOP + (HW_HIT - HW_TOP) * (hwScale(d) - HW
 const hwX = (edge: number, d: number): number => HW_CX + (edge - 2) * (HW_W / 4) * hwScale(d);
 const SCALE = [262, 294, 330, 392, 440, 523, 587, 659, 784, 880];
 function teamAvgLv() { return state.team.reduce((s, p) => s + p.lv, 0) / Math.max(1, state.team.length); }
+/** The song's length in seconds for this creature against the team as it is now. */
 function songLen(e: Pet) {
-  const rare = SPECIES[e.sp].rarity === 'rara';
-  return clamp(Math.round((rare ? tune.song_base_rara : tune.song_base_comun) + tune.song_per_level * (e.lv - teamAvgLv())), tune.song_min, tune.song_max);
+  return songSeconds(SPECIES[e.sp].rarity, e.lv, teamAvgLv(), SPECIES[e.sp].songSecs);
 }
 function beginSong() {
-  const S: Song = state.song, e = state.battle.enemies[S.cands[S.pick]], rare = SPECIES[e.sp].rarity === 'rara';
-  const n = songLen(e), beat = 60 / (tune.song_bpm + (rare ? tune.song_bpm_rare_bonus : 0));
-  const notes = []; let at = tune.song_travel + 0.9, prev = -1, prev2 = -2;
+  const S: Song = state.song, e = state.battle.enemies[S.cands[S.pick]];
+  const { bpm, half } = songTempo(SPECIES[e.sp].rarity), beat = 60 / bpm, t0 = tune.song_travel + 0.9, secs = songLen(e);
+  const times: number[] = []; // the song fills its length: a note on each beat or half-beat
+  for (let t = t0; t < t0 + secs; t += beat * (rng() < half ? 0.5 : 1)) times.push(t);
+  const n = times.length, notes = []; let prev = -1, prev2 = -2;
   for (let k = 0; k < n; k++) {
+    const at = times[k];
     let lane = Math.floor(rng() * 4); if (lane === prev && lane === prev2) lane = (lane + 1 + Math.floor(rng() * 3)) % 4;
     const deg = clamp(lane * 2 + (k % 3 === 2 ? 1 : 0) + (k >= n / 2 ? 1 : 0), 0, SCALE.length - 1);
     notes.push({ lane, at, judged: false, res: '', f: SCALE[deg] });
     prev2 = prev; prev = lane;
-    at += beat * (rng() < (rare ? tune.song_half_rara : tune.song_half_comun) ? 0.5 : 1);
   }
   Object.assign(S, { phase: 'play', t: 0, e, notes, beat, score: 0, perfect: 0, good: 0, miss: 0, flashL: [0, 0, 0, 0], ticks: 0 });
 }
@@ -680,17 +682,6 @@ function cornerButtons(y: number) {
     }
   }
 }
-/** The ring keys as big buttons, while a move plays out, for a player using a mouse or a finger. */
-function drawTouchPad() {
-  const keys: [string, string, number, number][] = [['KeyA', 'A', 330, 104], ['KeyW', 'W', 450, 104], ['Space', 'ESPACIO', 640, 180], ['KeyS', 'S', 830, 104], ['KeyD', 'D', 950, 104]];
-  for (const [code, label, cx, w] of keys) {
-    const x = cx - w / 2, y = 636, h = 74, on = down.has(code) || hit.has(code);
-    B(); ctx.roundRect(x, y + 5, w, h, 14); ctx.fillStyle = 'rgba(8,6,18,0.8)'; ctx.fill();
-    B(); ctx.roundRect(x, y + (on ? 4 : 0), w, h, 14); ctx.fillStyle = on ? '#fff6dc' : 'rgba(244,234,208,0.9)'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
-    txt(label, cx, y + h / 2 + 1 + (on ? 4 : 0), label.length > 1 ? 20 : 32, '#1b1426', 'center', true, false);
-    region(x, y, w, h + 6, press(code));
-  }
-}
 /** The song's staff in perspective: its five lines are the four lanes, beat lines run down it, and each lane is a button. */
 function drawStaff(S: Song) {
   const dFar = 1, dNear = -0.035;
@@ -726,6 +717,12 @@ function drawStaff(S: Song) {
     }
     if (S.phase === 'play') region(hwX(l, 0), 280, lw, H - 280, press(LANE_KEYS[l][0]));
   }
+}
+/** A tap on the ring: the key the hit wants, pressed for the player. */
+function tapRing() {
+  const a: Action | null = state.battle ? state.battle.act : null; if (!a) return;
+  const h = a.hits.find(x => !x.judged && a.t >= x.start - 0.05); if (!h) return;
+  const k = KEYCAPS.find(c => c.id === h.key); if (k) hit.add(k.codes[0]);
 }
 /** A tapped move card: pick it and use it at the enemy or ally last tapped, if it can reach them. */
 function planPick(k: number) {
@@ -1127,7 +1124,10 @@ function drawRing(a: Loose) {
     B(); ctx.arc(cx, cy, r, 0, TAU); ctx.lineWidth = 6; ctx.strokeStyle = col; ctx.stroke();
     ctx.restore();
     for (let k = 0; k < 4; k++) { const ang = k * Math.PI / 2 + Math.PI / 4; diamond(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r, 7, col); }
-    keycap(h.key, cx, cy, 0.75 + 0.25 * ease((now - h.start) / 0.12)); // this hit's key, from the moment its ring appears
+    if (pointer.active) { // with a finger or a mouse the ring itself is the button: only the timing counts
+      region(cx - R0, cy - R0, R0 * 2, R0 * 2, tapRing);
+      if ((a.side === 'team' ? state.tut.atk : state.tut.def) < 3) txt('¡Toca el anillo cuando se cierre!', cx, cy + R0 + 26, 20, a.side === 'team' ? CYAN : '#ffb0c0', 'center', true);
+    } else keycap(h.key, cx, cy, 0.75 + 0.25 * ease((now - h.start) / 0.12)); // this hit's key, from the moment its ring appears
     break;
   }
 }
@@ -1334,7 +1334,6 @@ function drawBattle() {
   }
   if (Bt.phase === 'win') { ctx.fillStyle = 'rgba(10,8,20,0.35)'; ctx.fillRect(0, 0, W, H); txt('¡Victoria!', W / 2, 300, 72, GOLD, 'center', true); }
   if (Bt.phase === 'lose') { ctx.fillStyle = `rgba(10,8,20,${clamp(Bt.t / 1.5, 0, 0.75)})`; ctx.fillRect(0, 0, W, H); txt('Tu equipo ha caído...', W / 2, 310, 52, '#ffd0d8', 'center', true); txt('Volverás a la fuente de la entrada, sin perder nada.', W / 2, 370, 20, '#e8e0f0', 'center'); }
-  if (Bt.phase === 'exec' && pointer.active) drawTouchPad();
   cornerButtons(10);
 }
 
@@ -1351,7 +1350,7 @@ function drawSong() {
       region(x - 120, 300, 240, 250, () => { if (S.pick === k) hit.add('Enter'); else { S.pick = k; sfx('select'); } });
       drawFigure(en.sp, x, 470, sel ? 1.15 : 0.85, -1, { t: state.t + k, side: sel ? 'enemy' : null, alpha: sel ? 1 : 0.5 });
       txt(`${nameOf(en)}  Nv ${en.lv}`, x, 510, 18, sel ? '#fff' : '#a098b8', 'center', true);
-      txt(`${SPECIES[en.sp].rarity === 'rara' ? 'Rara' : 'Común'} · ${songLen(en)} notas`, x, 536, 15, SPECIES[en.sp].rarity === 'rara' ? '#ff9fc8' : '#bfefff', 'center');
+      txt(`${RARITY_NAME[SPECIES[en.sp].rarity] || 'Común'} · canción de ${Math.round(songLen(en))} s`, x, 536, 15, SPECIES[en.sp].rarity === 'común' ? '#bfefff' : '#ff9fc8', 'center');
     });
     panel(240, 90, 800, 120, CYAN, 0.9);
     txt('La criatura está derrotada y asustada.', 640, 124, 22, '#e8fbff', 'center', true);
@@ -1389,7 +1388,7 @@ function drawSong() {
   }
   panel(20, 18, 560, 74, CYAN, 0.88);
   txt(`Canción sanadora para ${nameOf(e)}`, 40, 42, 21, '#e8fbff', 'left', true);
-  txt(`${rare ? 'Rara' : 'Común'} · Nv ${e.lv} frente a tu equipo (Nv medio ${teamAvgLv().toFixed(1)}) · ${S.notes.length} notas`, 40, 70, 15, rare ? '#ff9fc8' : '#bfefff', 'left');
+  txt(`${RARITY_NAME[SPECIES[e.sp].rarity] || 'Común'} · Nv ${e.lv} frente a tu equipo (Nv medio ${teamAvgLv().toFixed(1)}) · ${Math.round(S.notes.length ? S.notes[S.notes.length - 1].at - S.notes[0].at : 0)} s · ${S.notes.length} notas`, 40, 70, 15, rare ? '#ff9fc8' : '#bfefff', 'left');
   const mx = 1010, my = 52;
   txt('Confianza', mx, my - 18, 15, '#e8fbff', 'left', true);
   ctx.fillStyle = '#1a1424'; B(); ctx.roundRect(mx - 2, my - 2, 224, 16, 6); ctx.fill();

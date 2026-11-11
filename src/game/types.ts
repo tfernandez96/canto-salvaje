@@ -21,6 +21,8 @@ export interface Move {
 export interface Species {
   name: string; type: string; rarity: string; base: number[]; grow: number[];
   learn: Record<number, string[]>; evo?: string; h: number; w: number; desc?: string; evolved?: boolean;
+  /** A legendary creature's own song length, in seconds. */
+  songSecs?: number;
 }
 
 /** One creature, on the team or in a battle. */

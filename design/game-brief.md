@@ -21,12 +21,13 @@ After play: Estructura: Mapa + campamento · Progreso: Mixto · RNG: Salas baraj
 After play: Continuemos
 After play: Si, hace commit. Ahora, podemos hacerlo touch-able con el mouse, y refinar la experiencia para mobile?
 After play: Se podría cambiar la parte de música por algo como esa foto? Y al tener la vista vertical, los controles podrían ser: A o left, S o abajo, D o derecha, F o Espacio. Te parece bien? Es muy poco natural como está hasta el momento. Además, con esa estructura es muchisimo mas usable en mobile. Mejoras de tablero de selección de ataque: - Quitar panel de Objetivo, donde te dice la eficacia del ataque. - Poner algún indicador en el ataque mismo, que te indique la eficacia contra el objetivo seleccionado. - Cambiar el +1 energía, por un prisma verde, simbolizando que añade energía, sin decirlo explícitamente. - En Vez de decir Energía libre 5, poner 5 prismas llenos y 5 vacíos (Simbolizando 5/10)
+After play: Al estar en mobile, quitale las teclas para hacer parry/perfect en los ataques, con solo clickear en el círculo que sea suficiente. Además, la duración de las canciones se siente muuuy pobre con solo 4 teclas. Subilo por lo menos a unos 10 segundos (para los common), 20 segundos para los rare, 45 segundos para los super raros, y la duración de cada legendario debería ser única (puede ser 1 min o mas sin problema)
 
 **Pitch:** Bajas a una mazmorra con un equipo de hasta 4 mascotas, peleas por turnos con golpes y bloqueos a tiempo, y a cada criatura que derrotas le tocas una canción sanadora para convencerla de unirse a ti.
 
 **Genre:** RPG por turnos de adiestrar mascotas (creature collector + JRPG por turnos)
 
-**Controls:** Flechas/WASD para moverte por la mazmorra. En el campamento, Arriba/Abajo y Enter; en el mapa, Izquierda/Derecha, Enter para entrar y Retroceso para volver. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada golpe tiene su tecla (W, A, S, D o Espacio), de una secuencia propia de cada ataque: aparece dentro del anillo en cuanto el anillo aparece, nunca al elegir el ataque, y se pulsa cuando el anillo se cierra, al golpear y al bloquear. En la canción, cuatro carriles: A o ←, S o ↓, D o →, F o Espacio, cuando la nota toca la línea. Con mouse o pantalla táctil: todo lo que se ve se toca; en la mazmorra se mantiene el dedo para caminar hacia él; en tu turno se toca un enemigo para apuntar y un ataque para usarlo; los anillos muestran botones grandes abajo y en la canción se toca el carril.
+**Controls:** Flechas/WASD para moverte por la mazmorra. En el campamento, Arriba/Abajo y Enter; en el mapa, Izquierda/Derecha, Enter para entrar y Retroceso para volver. En tu turno: Izquierda/Derecha cambian de ataque, Arriba/Abajo de objetivo (de arriba hacia abajo en pantalla), 1-4 o Enter confirman y Retroceso vuelve. Cada golpe tiene su tecla (W, A, S, D o Espacio), de una secuencia propia de cada ataque: aparece dentro del anillo en cuanto el anillo aparece, nunca al elegir el ataque, y se pulsa cuando el anillo se cierra, al golpear y al bloquear. En la canción, cuatro carriles: A o ←, S o ↓, D o →, F o Espacio, cuando la nota toca la línea. Con mouse o pantalla táctil: todo lo que se ve se toca; en la mazmorra se mantiene el dedo para caminar hacia él; en tu turno se toca un enemigo para apuntar y un ataque para usarlo; en los anillos basta tocar el anillo cuando se cierra, sin teclas y en la canción se toca el carril.
 
 **Question:** ¿Se sostiene una sesión de mazmorra donde la pausa táctica del turno y el timing de golpes, bloqueos y canción se alternan sin cansar?
 
@@ -45,7 +46,7 @@ After play: Se podría cambiar la parte de música por algo como esa foto? Y al 
 - View: 2.5D · Camera: mazmorra vista desde arriba, ligeramente inclinada; combate fijo de lado (tu equipo a la izquierda, enemigos a la derecha).
 
 ## First minute
-Eliges una de tres mascotas iniciales (Brasa, Brote o Marea). Llegas al campamento, abres el mapa y entras a la Mazmorra de la Fuente. En la primera sala y tocas a una criatura salvaje que deambula. En el combate, el tiempo se detiene: eliges un ataque con 1-4 y un anillo se cierra sobre el enemigo. "Espacio cuando el anillo se cierre" y el golpe crítico salta en grande. El enemigo anuncia su ataque y otro anillo te pide bloquear: lo paras. Cae derrotado, la cinta de pentagrama se tiende hacia él y tocas 6 notas cortas. "¡Se une a tu equipo!", con su nombre y un jingle. Ahora tienes 2 mascotas.
+Eliges una de tres mascotas iniciales (Brasa, Brote o Marea). Llegas al campamento, abres el mapa y entras a la Mazmorra de la Fuente. En la primera sala y tocas a una criatura salvaje que deambula. En el combate, el tiempo se detiene: eliges un ataque con 1-4 y un anillo se cierra sobre el enemigo. "Espacio cuando el anillo se cierre" y el golpe crítico salta en grande. El enemigo anuncia su ataque y otro anillo te pide bloquear: lo paras. Cae derrotado, la cinta de pentagrama se tiende hacia él y tocas una canción corta, de unos 10 segundos. "¡Se une a tu equipo!", con su nombre y un jingle. Ahora tienes 2 mascotas.
 
 ## Challenge
 Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 3-4, trae un grupo de 3 con un tipo que tu inicial no cubre: el primer combate de verdad. El jefe llega hacia el minuto 10-12: anuncia un golpe enorme un turno antes, golpea en varias fases de timing y tiene una segunda fase a media vida. Si pierdes, vuelves a la fuente de la entrada con el equipo curado y sin perder nada. Las salas superadas siguen superadas. Más adelante: criaturas más raras con canciones más largas y rápidas.
@@ -66,7 +67,7 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - [x] Mazmorra pequeña: 5-6 salas y el jefe
 - [x] Combate por turnos con pausa para elegir el ataque de cada mascota y franja de orden de turno
 - [x] Golpes a tiempo (crítico) y bloqueo o parada a tiempo (parada perfecta = sin daño + contragolpe)
-- [x] Canción sanadora: minijuego de ritmo en cuatro carriles verticales (A S D F, o tocando el carril). Su longitud depende de la rareza y del nivel de la criatura respecto al tuyo
+- [x] Canción sanadora: minijuego de ritmo en cuatro carriles verticales (A S D F, o tocando el carril). Dura según la rareza (común 10 s, rara 20 s, superrara 45 s, cada legendaria la suya, de 1 min o más), algo más si la criatura supera el nivel de tu equipo
 - [x] Equipo de hasta 4 mascotas, empezando por elegir 1 de 3 iniciales
 - [x] Tres tipos en ciclo (Brasa > Brote > Marea > Brasa), con aviso de golpe fuerte o débil
 - [x] Niveles por experiencia y ataques nuevos al subir de nivel
@@ -77,7 +78,7 @@ Las salas 1 y 2 tienen criaturas sueltas y débiles. La sala 3, hacia el minuto 
 - [x] Energía compartida del equipo: 5 al empezar, +2 por turno, los ataques gratis recargan (+1 o +2) y cada parada perfecta puede dar +1 (probabilidad parry_config / golpes del ataque; el jefe vale más); panel con libre, reservada, recarga y coste del ataque elegido
 - [x] Cada ataque con una secuencia de teclas, una por golpe (W, A, S, D o Espacio): la tecla aparece en el anillo al aparecer el anillo, nunca al elegir el ataque
 - [x] Campamento (fogata, fuente que cura, menú), mapa de mazmorras que se abren al vencer a cada jefe, y guardado en el navegador con Continuar o Nueva partida
-- [x] Se juega con mouse o pantalla táctil (botones grandes para los anillos y la canción, pausa y silencio en pantalla) y en el teléfono: sin zoom ni desplazamiento, pantalla completa en horizontal donde el navegador lo permite, aviso para girar el teléfono
+- [x] Se juega con mouse o pantalla táctil (en los anillos basta tocar el anillo, en la canción el carril; pausa y silencio en pantalla) y en el teléfono: sin zoom ni desplazamiento, pantalla completa en horizontal donde el navegador lo permite, aviso para girar el teléfono
 - [x] Panel de turno sin palabras de más: la eficacia contra el objetivo marcado va en cada carta (chevrones), la energía que da un ataque es un prisma verde y la libre una fila de prismas llenos y vacíos
 
 ## Your systems

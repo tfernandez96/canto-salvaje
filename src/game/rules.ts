@@ -27,3 +27,23 @@ export function calcDmg(a: Pet, d: Pet, m: Move, pow?: number) {
   const base = (pow != null ? pow : m.pow) * (a.atk / (a.atk + d.def)) * tune.dmg_scale;
   return Math.max(1, Math.round(base * typeMult(m.type, d.type) * (0.9 + rng() * 0.2)));
 }
+
+/** Rarity tiers, as the data names them: común, rara, superrara, legendaria. */
+export const RARITY_NAME: Record<string, string> = { 'común': 'Común', rara: 'Rara', superrara: 'Superrara', legendaria: 'Legendaria' };
+
+/**
+ * How long a creature's healing song lasts, in seconds: by rarity (a legendary may have its own
+ * length), plus song_secs_per_level for each level it is above the team's average (less below).
+ */
+export function songSeconds(rarity: string, lv: number, avgLv: number, own?: number): number {
+  const base = rarity === 'legendaria' ? (own ?? tune.song_secs_legendaria)
+    : rarity === 'superrara' ? tune.song_secs_superrara : rarity === 'rara' ? tune.song_secs_rara : tune.song_secs_comun;
+  return clamp(base + tune.song_secs_per_level * (lv - avgLv), tune.song_secs_min, tune.song_secs_max);
+}
+
+/** A song's tempo: rarer creatures play faster, with more half-beats. */
+export function songTempo(rarity: string): { bpm: number; half: number } {
+  if (rarity === 'superrara' || rarity === 'legendaria') return { bpm: tune.song_bpm + tune.song_bpm_epic_bonus, half: tune.song_half_rara };
+  if (rarity === 'rara') return { bpm: tune.song_bpm + tune.song_bpm_rare_bonus, half: tune.song_half_rara };
+  return { bpm: tune.song_bpm, half: tune.song_half_comun };
+}

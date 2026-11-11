@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import config from '../../data/config.json';
 import { rng, setSeed } from '../../src/game/rng';
-import { calcStats, parryChance, typeMult, xpNeed } from '../../src/game/rules';
+import { calcStats, parryChance, songSeconds, typeMult, xpNeed } from '../../src/game/rules';
 import { MOVES, SPECIES } from '../../src/game/data';
 import type { Pet } from '../../src/game/types';
 
@@ -79,5 +79,22 @@ describe('calcStats', () => {
     const boss = pet('golem', 7, true), plain = pet('golem', 7);
     calcStats(boss); calcStats(plain);
     expect(boss.maxhp).toBe(Math.round(plain.maxhp * config.boss_hp_mult.value));
+  });
+});
+
+describe('songSeconds', () => {
+  it('lasts by rarity at the team\'s own level', () => {
+    expect(songSeconds('común', 3, 3)).toBe(config.song_secs_comun.value);
+    expect(songSeconds('rara', 3, 3)).toBe(config.song_secs_rara.value);
+    expect(songSeconds('superrara', 3, 3)).toBe(config.song_secs_superrara.value);
+  });
+  it('gives a legendary its own length, or the default when it has none', () => {
+    expect(songSeconds('legendaria', 5, 5, 95)).toBe(95);
+    expect(songSeconds('legendaria', 5, 5)).toBe(config.song_secs_legendaria.value);
+  });
+  it('grows with each level above the team and shrinks below, within its bounds', () => {
+    expect(songSeconds('rara', 6, 4) - songSeconds('rara', 4, 4)).toBe(2 * config.song_secs_per_level.value);
+    expect(songSeconds('común', 1, 40)).toBe(config.song_secs_min.value);
+    expect(songSeconds('legendaria', 1, 1, 9999)).toBe(config.song_secs_max.value);
   });
 });

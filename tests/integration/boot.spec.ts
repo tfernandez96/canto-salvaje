@@ -79,7 +79,7 @@ test('can be played with the mouse from the title into the first dungeon, walkin
   expect(errors).toEqual([]);
 });
 
-test('in a battle turn, a tap on an attack card uses it on the enemy tapped before', async ({ page }, info) => {
+test('in a battle turn, a tap on an attack card uses it on the enemy tapped before, and a tap on its ring lands the hit', async ({ page }, info) => {
   await page.addInitScript(() => { try { localStorage.clear(); } catch { /* no storage */ } });
   const errors = await open(page, 'manual=1&seed=7');
   // Into the first dungeon by keys, then walk into the first wild creature until its battle asks for a move.
@@ -103,7 +103,7 @@ test('in a battle turn, a tap on an attack card uses it on the enemy tapped befo
   expect(after.phase).toBe('exec');
   expect(after.plan).toEqual({ move: 'chispazo', target: 0 });
 
-  // The ring key row: step until Chispazo's first ring is about to close, then tap the key it shows.
+  // Step until Chispazo's first ring is about to close, then tap the ring itself (no key needed).
   const key = await page.evaluate(() => {
     const g = window.game!;
     type H = { start: number; impact: number; key: string; judged: boolean };
@@ -112,9 +112,9 @@ test('in a battle turn, a tap on an attack card uses it on the enemy tapped befo
     g.step(1);
     return act()!.hits[0].key;
   });
-  await page.screenshot({ path: info.outputPath('touch-pad.png') }); // kept with the test's results, for a look
-  const padX: Record<string, number> = { A: 330, W: 450, SPC: 640, S: 830, D: 950 };
-  await page.mouse.click(padX[key], 673); await page.evaluate(() => window.game!.step());
+  await page.screenshot({ path: info.outputPath('touch-ring.png') }); // kept with the test's results, for a look
+  expect(key).toBeTruthy();
+  await page.mouse.click(888, 493); await page.evaluate(() => window.game!.step()); // the ring around the Musgorro
   const res = await page.evaluate(() => (window.game!.state as { battle: { act: { hits: { res: string }[] } } }).battle.act.hits[0].res);
   expect(['perfect', 'good']).toContain(res);
   expect(errors).toEqual([]);
